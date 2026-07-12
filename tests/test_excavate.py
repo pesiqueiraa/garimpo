@@ -1,4 +1,7 @@
-from app import excavate
+import pytest
+
+from app import db, excavate, llm
+from tests.conftest import make_product
 
 
 def test_confirm_acha_na_loja_br(monkeypatch):
@@ -58,3 +61,90 @@ def test_sample_reviews_trunca_e_limita(monkeypatch):
     sampled = excavate.sample_reviews(grande, cap=10)
     assert len(sampled["AppA"]) == 5 and len(sampled["AppB"]) == 5
     assert len(sampled["AppA"][0]) == 300
+
+
+SUGGESTION = {"competitors": [{"name": "Rival", "search_term": "rival oficina"}]}
+CLUSTERS = {"clusters": [{"theme": "cobrança confusa", "frequency": 12,
+                          "severity": "alta",
+                          "examples": [{"app": "Rival", "excerpt": "cobraram 2x"}]}]}
+ANGLE = {"attack_angle": "Pix nativo e cobrança transparente."}
+
+
+def _mock_llm_ok(monkeypatch):
+    respostas = iter([SUGGESTION, CLUSTERS, ANGLE])
+    monkeypatch.setattr(llm, "ask_json",
+                        lambda prompt, **kw: (next(respostas), 1000, 100))
+
+
+def _mock_store_ok(monkeypatch):
+    monkeypatch.setattr(excavate, "confirm_on_play_store",
+                        lambda term: {"app_id": "br.rival", "name": "Rival",
+                                      "store": "br", "rating": 3.1,
+                                      "ratings_count": 8000})
+    monkeypatch.setattr(excavate, "collect_negative_reviews",
+                        lambda app_id, store: ["péssimo, cobraram duas vezes"] * 30)
+
+
+def test_excavate_all_gera_dossie_completo(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "Alvo", score=9.0)
+    _mock_llm_ok(monkeypatch)
+    _mock_store_ok(monkeypatch)
+
+    assert excavate.excavate_all(conn) == 1
+    row = conn.execute("SELECT dig_status FROM products WHERE id=?", (pid,)).fetchone()
+    assert row["dig_status"] == "done"
+    d = db.dossiers_since(conn, "2000-01-01T00:00:00")[0]
+    assert d["dossier"]["attack_angle"] == "Pix nativo e cobrança transparente."
+    assert d["competitors"][0]["reviews_collected"] == 30
+    assert d["clusters"][0]["theme"] == "cobrança confusa"
+    assert d["dossier"]["cost_usd"] > 0
+
+
+def test_excavate_sem_players_gera_dossie_vazio(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "WebOnly", score=8.0)
+    respostas = iter([SUGGESTION, ANGLE])   # sem chamada de cluster
+    monkeypatch.setattr(llm, "ask_json",
+                        lambda prompt, **kw: (next(respostas), 500, 50))
+    monkeypatch.setattr(excavate, "confirm_on_play_store", lambda term: None)
+
+    assert excavate.excavate_all(conn) == 1
+    d = db.dossiers_since(conn, "2000-01-01T00:00:00")[0]
+    assert d["competitors"] == [] and d["clusters"] == []
+    assert d["dossier"]["attack_angle"]
+
+
+def test_excavate_falha_incrementa_tentativa(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "Azarado", score=8.0)
+
+    def explode(prompt, **kw):
+        raise llm.LLMError("boom")
+
+    monkeypatch.setattr(llm, "ask_json", explode)
+    assert excavate.excavate_all(conn) == 0
+    row = conn.execute("SELECT dig_status, dig_attempts FROM products WHERE id=?",
+                       (pid,)).fetchone()
+    assert row["dig_status"] is None and row["dig_attempts"] == 1
+
+
+def test_excavate_estouro_de_orcamento_marca_failed(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "Caro", score=8.0)
+    # 1M tokens de saida = US$2.00 > teto de 0.25
+    monkeypatch.setattr(llm, "ask_json",
+                        lambda prompt, **kw: (SUGGESTION, 0, 1_000_000))
+    _mock_store_ok(monkeypatch)
+
+    assert excavate.excavate_all(conn) == 0
+    row = conn.execute("SELECT dig_status FROM products WHERE id=?", (pid,)).fetchone()
+    assert row["dig_status"] == "failed"
+
+
+def test_excavate_pula_sem_chave(conn, monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    make_product(conn, "Qualquer", score=9.0)
+    assert excavate.excavate_all(conn) == 0
+    # produto continua elegivel (nao conta tentativa)
+    assert len(db.dig_queue(conn)) == 1

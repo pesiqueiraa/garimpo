@@ -25,7 +25,7 @@ Abra o HTML gerado no navegador. Só o Show HN e o YC funcionam sem nenhuma chav
 | Variável | Para quê | Onde conseguir |
 |---|---|---|
 | `PH_TOKEN` | Coletar do Product Hunt | producthunt.com/v2/oauth/applications → crie um app e use o *Developer Token* |
-| `ANTHROPIC_API_KEY` | Classificação + score com IA | console.anthropic.com |
+| `OPENAI_API_KEY` | Classificação + score com IA | platform.openai.com/api-keys |
 | `SMTP_HOST` / `SMTP_PORT` | Servidor de e-mail | Resend: `smtp.resend.com` / `587` · Gmail: `smtp.gmail.com` / `587` |
 | `SMTP_USER` / `SMTP_PASS` | Login do e-mail | Resend: usuário `resend` + API key (resend.com/api-keys) · Gmail: seu e-mail + **senha de app** (exige 2FA) |
 | `MAIL_FROM` | Remetente | Resend sem domínio próprio: `onboarding@resend.dev` · Gmail: omitir (usa SMTP_USER) |

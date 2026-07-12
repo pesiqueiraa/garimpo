@@ -1,17 +1,17 @@
-"""Enriquecimento opcional via API da Anthropic.
+"""Enriquecimento opcional via API da OpenAI.
 
 Classifica nicho, dor, publico e da um palpite inicial sobre concorrencia
 no Brasil (baseado no conhecimento do modelo — para veredito confiavel,
 o proximo passo e plugar uma API de busca como Serper/Tavily).
 
-Requer ANTHROPIC_API_KEY no ambiente. Sem a chave, o passo e pulado.
+Requer OPENAI_API_KEY no ambiente. Sem a chave, o passo e pulado.
 """
 import json
 import os
 
 import requests
 
-MODEL = "claude-haiku-4-5-20251001"  # barato e suficiente para classificar
+MODEL = "gpt-5-mini"  # barato e suficiente para classificar
 
 PROMPT = """Voce e um analista de oportunidades de SaaS para o mercado brasileiro.
 Analise o produto abaixo e responda SOMENTE com JSON valido, sem markdown:
@@ -33,9 +33,9 @@ Fonte: {source} ({points} pontos/votos)"""
 
 
 def enrich_rows(conn, limit: int = 25) -> int:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        print("[enrich] ANTHROPIC_API_KEY ausente, pulando enriquecimento")
+        print("[enrich] OPENAI_API_KEY ausente, pulando enriquecimento")
         return 0
 
     rows = conn.execute(
@@ -47,15 +47,16 @@ def enrich_rows(conn, limit: int = 25) -> int:
     for row in rows:
         try:
             r = requests.post(
-                "https://api.anthropic.com/v1/messages",
+                "https://api.openai.com/v1/chat/completions",
                 headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
+                    "Authorization": f"Bearer {api_key}",
                     "content-type": "application/json",
                 },
                 json={
                     "model": MODEL,
-                    "max_tokens": 300,
+                    "reasoning_effort": "minimal",  # classificacao simples, sem gastar em raciocinio
+                    "response_format": {"type": "json_object"},
+                    "max_completion_tokens": 500,
                     "messages": [{
                         "role": "user",
                         "content": PROMPT.format(
@@ -68,7 +69,7 @@ def enrich_rows(conn, limit: int = 25) -> int:
                 timeout=60,
             )
             r.raise_for_status()
-            text = r.json()["content"][0]["text"]
+            text = r.json()["choices"][0]["message"]["content"]
             data = json.loads(text.replace("```json", "").replace("```", "").strip())
             conn.execute(
                 """UPDATE products SET niche=?, pain=?, audience=?,

@@ -21,7 +21,7 @@ def run(send_mail: bool = True) -> None:
         stats[db.upsert(conn, item)] += 1
     print(f"[db] novos: {stats['new']} · cross-source: {stats['cross_source']} · repetidos: {stats['seen']}")
 
-    # 2. Enriquecimento (opcional, precisa de ANTHROPIC_API_KEY)
+    # 2. Enriquecimento (opcional, precisa de OPENAI_API_KEY)
     enrich.enrich_rows(conn)
 
     # 3. Relatorio

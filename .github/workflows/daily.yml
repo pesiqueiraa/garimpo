@@ -1,0 +1,40 @@
+name: Garimpo diario
+
+on:
+  schedule:
+    - cron: "0 10 * * *"   # 10:00 UTC = 7:00 em Brasília
+  workflow_dispatch: {}      # permite rodar manualmente na aba Actions
+
+permissions:
+  contents: write            # para commitar o banco de volta
+
+jobs:
+  garimpo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar pipeline
+        env:
+          PH_TOKEN: ${{ secrets.PH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python -m app.main
+
+      - name: Commitar banco atualizado
+        run: |
+          git config user.name "garimpo-bot"
+          git config user.email "bot@garimpo"
+          git add data/garimpo.db
+          git diff --cached --quiet || git commit -m "garimpo: atualiza banco $(date +%F)"
+          git push

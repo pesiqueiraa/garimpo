@@ -1,0 +1,14 @@
+# Sistema
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Segredos locais
+.env
+
+# Relatórios gerados (o banco data/garimpo.db É versionado — o workflow commita ele)
+data/*.html

@@ -46,12 +46,13 @@ def _dossier_html(d) -> str:
     dores = ""
     for cl in d["clusters"]:
         cor = SEVERITY_COLOR.get(cl["severity"], "#666")
+        sev = html.escape(cl["severity"] or "")
         exemplos = "".join(
             (f"<div style='font-size:12px;color:#666;font-style:italic;margin:2px 0 2px 12px'>"
              f"“{html.escape(e['excerpt'])}” — {html.escape(e['app'])}</div>")
             for e in json.loads(cl["examples"] or "[]")[:2])
         dores += (f"<div style='margin:8px 0'><b style='font-size:13px'>{html.escape(cl['theme'])}</b> "
-                  f"<span style='color:{cor};font-size:12px'>({cl['frequency']}× · {cl['severity']})</span>"
+                  f"<span style='color:{cor};font-size:12px'>({cl['frequency']}× · {sev})</span>"
                   f"{exemplos}</div>")
 
     angle = html.escape(dos["attack_angle"] or "").replace("\n", "<br>")

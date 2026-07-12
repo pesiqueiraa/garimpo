@@ -20,7 +20,7 @@ Em uma frase: **um radar diário de oportunidades de SaaS para o mercado brasile
 ## 3. Como funciona (pipeline)
 
 ```
-coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → relatório HTML → e-mail diário
+coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → escavação (dossiê) → relatório HTML → e-mail diário
 ```
 
 1. **Coleta** — três fontes na v1.0:
@@ -28,9 +28,10 @@ coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → relatório HTML �
    - Product Hunt via API GraphQL oficial (requer `PH_TOKEN`)
    - Y Combinator via espelho público yc-oss (sem chave)
 2. **Dedup** — chave por domínio da URL (ou nome normalizado). Produto visto em **múltiplas fontes** é marcado como sinal forte (`cross_source`).
-3. **Enriquecimento** (opcional, requer `ANTHROPIC_API_KEY`) — LLM classifica: nicho, dor que resolve, público (B2B/B2C), veredito de concorrência BR e score de oportunidade 0-10.
-4. **Relatório** — HTML com cards (nome, tagline, fonte, pontos, score, veredito BR) salvo em `data/` e enviado por SMTP.
-5. **Automação** — GitHub Actions roda tudo diariamente às 7h (Brasília) de graça e commita o banco de volta no repo.
+3. **Enriquecimento** (opcional, requer `OPENAI_API_KEY`) — LLM classifica: nicho, dor que resolve, público (B2B/B2C), veredito de concorrência BR e score de oportunidade 0-10.
+4. **Escavação** (v1.1, opcional, requer `OPENAI_API_KEY`) — para até 2 produtos/dia com score ≥ 7, o LLM sugere concorrentes, confirma na Play Store (BR primeiro, US fallback), coleta reviews 1-3★, clusteriza as dores e gera um "ângulo de ataque" para tropicalização. Sai como dossiê no relatório.
+5. **Relatório** — HTML com cards (nome, tagline, fonte, pontos, score, veredito BR) e a seção de dossiês prontos, salvo em `data/` e enviado por SMTP.
+6. **Automação** — GitHub Actions roda tudo diariamente às 7h (Brasília) de graça e commita o banco de volta no repo.
 
 ## 4. Stack e decisões técnicas
 
@@ -38,52 +39,64 @@ coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → relatório HTML �
 |---|---|---|
 | Linguagem | Python 3.12 | Ecossistema de scraping/dados; familiaridade |
 | Banco | SQLite (arquivo no repo) | Zero infra; volume pequeno; versionado junto do código |
-| LLM | API Anthropic, modelo Haiku | Classificação simples não precisa de modelo caro |
-| Envio | SMTP puro (Gmail + senha de app) | Sem dependência de serviço de e-mail pago |
+| LLM | API OpenAI, modelo gpt-5-mini | Classificação e escavação sem custo alto; chamada direta via `requests` |
+| Envio | SMTP via Resend (ou Gmail) | Resend é gratuito p/ volume baixo e não depende de senha de app |
 | Automação | GitHub Actions (cron) | Gratuito, sem servidor |
-| Dependências | Só `requests` na v1.0 | Minimalismo proposital; cada fase adiciona o próprio mínimo |
+| Dependências | `requests` + `google-play-scraper` | Minimalismo proposital; cada fase adiciona o próprio mínimo |
 
 **Princípios de código adotados:**
 - API oficial ou RSS sempre antes de scraping; scraping só leve, com pausas, 1x/dia.
 - Falha graciosa: fonte que quebra loga e é pulada, o pipeline nunca morre por causa de uma fonte.
-- Toda chave/credencial é opcional: sem `PH_TOKEN` pula Product Hunt, sem `ANTHROPIC_API_KEY` pula enriquecimento, sem SMTP salva o HTML só em disco.
+- Toda chave/credencial é opcional: sem `PH_TOKEN` pula Product Hunt, sem `OPENAI_API_KEY` pula enriquecimento e escavação, sem SMTP salva o HTML só em disco.
+- A escavação nunca derruba o pipeline: falha de um produto (orçamento estourado, erro de rede) é logada e pulada; o relatório sai sempre.
 - Custo-alvo: centavos por dia.
 
 ## 5. Estrutura do repositório
 
 ```
 garimpo/
-├── main.py                    # orquestra o pipeline (--no-mail para testar)
 ├── requirements.txt
+├── requirements-dev.txt       # + pytest, para rodar a suíte
 ├── README.md                  # setup e instruções operacionais
 ├── ROADMAP.md                 # fases do produto e critérios de pronto
-├── CONTEXT.md                 # este arquivo
-├── garimpo/
+├── app/
+│   ├── main.py                # orquestra o pipeline (--no-mail para testar)
 │   ├── collectors.py          # Show HN, Product Hunt, YC
-│   ├── db.py                  # SQLite, schema, dedup, consultas
+│   ├── db.py                  # SQLite, schema/migração, dedup, consultas
 │   ├── enrich.py              # classificação LLM (opcional)
+│   ├── llm.py                 # cliente OpenAI (gpt-5-mini) via requests
+│   ├── excavate.py            # escavação de concorrentes + dossiê (v1.1)
 │   └── report.py              # HTML do e-mail + envio SMTP
+├── docs/
+│   ├── contexto.md            # este arquivo
+│   └── roadmap.md
+├── tests/                     # suíte pytest (unit, com mocks de rede/LLM)
 ├── data/                      # garimpo.db + relatórios gerados
 └── .github/workflows/daily.yml
 ```
 
-**Schema atual (tabela `products`):** `dedup_key`, `name`, `tagline`, `url`, `source`, `source_url`, `points`, `category`, `first_seen`, `last_seen`, `seen_count`, `sources_seen`, e campos de enriquecimento: `niche`, `pain`, `audience`, `br_verdict`, `opportunity_score`.
+**Schema atual (tabela `products`):** `dedup_key`, `name`, `tagline`, `url`, `source`, `source_url`, `points`, `category`, `first_seen`, `last_seen`, `seen_count`, `sources_seen`, campos de enriquecimento (`niche`, `pain`, `audience`, `br_verdict`, `opportunity_score`) e campos de escavação (`dig_status`, `dig_attempts`, adicionados por migração leve em `db.py`).
+
+**Tabelas da escavação (v1.1):**
+- `competitors` — concorrentes confirmados na Play Store por produto (`app_id`, `name`, `store`, `rating`, `ratings_count`, `reviews_collected`).
+- `pain_clusters` — temas de dor extraídos das reviews 1-3★ (`theme`, `frequency`, `severity`, `examples` em JSON).
+- `dossiers` — um por produto escavado, com `attack_angle`, `cost_usd`, `tokens_in`, `tokens_out`.
 
 ## 6. Variáveis de ambiente
 
 | Variável | Obrigatória? | Função |
 |---|---|---|
 | `PH_TOKEN` | Não | Habilita coleta do Product Hunt |
-| `ANTHROPIC_API_KEY` | Não | Habilita enriquecimento LLM |
+| `OPENAI_API_KEY` | Não | Habilita enriquecimento LLM e escavação de concorrentes (dossiê) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` | Não | Habilitam envio do e-mail |
+| `MAIL_FROM` | Não | Remetente do e-mail (obrigatório para Resend sem domínio próprio; opcional no Gmail) |
 
 No GitHub Actions, todas entram como *secrets*.
 
 ## 7. Estado atual
 
-- **v1.0 entregue e testada** (pipeline completo com dados simulados; dedup e cross-source validados).
-- **Pendência operacional:** subir para um repo privado no GitHub, configurar secrets e receber o primeiro e-mail real. É o pré-requisito para qualquer desenvolvimento novo.
-- Próxima entrega planejada: **v1.1 — minerador de reviews + dossiê** (ver ROADMAP.md, Fase 1).
+- **v1.1 entregue** — pipeline diário completo (coleta, dedup, enriquecimento, escavação de concorrentes com dossiê, relatório, e-mail) rodando em produção via GitHub Actions.
+- Próxima: **v1.2** (ver ROADMAP.md) — veredito de concorrência BR com busca real, a próxima fronteira de honestidade do produto.
 
 ## 8. Direção do produto (resumo do ROADMAP.md)
 
@@ -94,7 +107,7 @@ No GitHub Actions, todas entram como *secrets*.
 
 ## 9. Limitações conhecidas (honestidade > marketing)
 
-- O veredito de concorrência BR na v1.0 é **palpite do LLM**, sem busca na web — serve de triagem, não de decisão. Upgrade previsto na v1.2.
+- O veredito de concorrência BR ainda é **palpite do LLM**, sem busca na web — serve de triagem, não de decisão. Upgrade previsto na v1.2.
 - Reviews da Play Store (v1.1) cobrem bem B2C e B2B de pequenos negócios; SaaS enterprise/web-only pode não ter app — nesses casos o dossiê sai sem mapa de dores.
 - Score é heurístico e será recalibrado com feedback de uso (Fase 4).
 - O yc-oss é um espelho comunitário; se sair do ar, a fonte YC precisa de alternativa.

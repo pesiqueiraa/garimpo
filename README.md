@@ -5,11 +5,12 @@ Radar pessoal de oportunidades de SaaS para tropicalizar. Todo dia ele coleta la
 ## Como funciona
 
 ```
-coleta (APIs) → SQLite (dedup) → enriquecimento (LLM, opcional) → relatório HTML → e-mail
+coleta (APIs) → SQLite (dedup) → enriquecimento (LLM, opcional) → escavação (dossiê, opcional) → relatório HTML → e-mail
 ```
 
 - Produtos que aparecem em **mais de uma fonte** ganham destaque (sinal forte de tração).
 - O enriquecimento classifica nicho, dor, público e dá um palpite sobre concorrência no Brasil, com score 0-10.
+- A escavação pega os produtos com score ≥ 7 (máx. 2 por dia) e monta um dossiê: concorrentes confirmados na Play Store, mapa de dores extraído de reviews 1-3★ e um ângulo de ataque para tropicalização.
 
 ## Rodando localmente
 
@@ -56,8 +57,20 @@ garimpo/
 │   ├── collectors.py        # Show HN, Product Hunt, YC
 │   ├── db.py                # SQLite + deduplicação
 │   ├── enrich.py            # classificação com LLM (opcional)
+│   ├── llm.py               # cliente OpenAI (gpt-5-mini)
+│   ├── excavate.py          # escavação de concorrentes + dossiê (opcional)
 │   └── report.py            # HTML do e-mail + envio SMTP
+├── tests/                   # suíte pytest
 ├── docs/                    # roadmap e contexto do projeto
 ├── data/                    # banco e relatórios gerados
 └── .github/workflows/daily.yml
+```
+
+## Desenvolvimento
+
+Para rodar os testes localmente:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest
 ```

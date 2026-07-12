@@ -1,4 +1,4 @@
-"""Enriquecimento opcional via API da OpenAI.
+"""Enriquecimento opcional via LLM (app/llm.py).
 
 Classifica nicho, dor, publico e da um palpite inicial sobre concorrencia
 no Brasil (baseado no conhecimento do modelo — para veredito confiavel,
@@ -6,12 +6,9 @@ o proximo passo e plugar uma API de busca como Serper/Tavily).
 
 Requer OPENAI_API_KEY no ambiente. Sem a chave, o passo e pulado.
 """
-import json
 import os
 
-import requests
-
-MODEL = "gpt-5-mini"  # barato e suficiente para classificar
+from app import llm
 
 PROMPT = """Voce e um analista de oportunidades de SaaS para o mercado brasileiro.
 Analise o produto abaixo e responda SOMENTE com JSON valido, sem markdown:
@@ -33,8 +30,7 @@ Fonte: {source} ({points} pontos/votos)"""
 
 
 def enrich_rows(conn, limit: int = 25) -> int:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    if not os.environ.get("OPENAI_API_KEY"):
         print("[enrich] OPENAI_API_KEY ausente, pulando enriquecimento")
         return 0
 
@@ -46,31 +42,11 @@ def enrich_rows(conn, limit: int = 25) -> int:
     done = 0
     for row in rows:
         try:
-            r = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": MODEL,
-                    "reasoning_effort": "minimal",  # classificacao simples, sem gastar em raciocinio
-                    "response_format": {"type": "json_object"},
-                    "max_completion_tokens": 500,
-                    "messages": [{
-                        "role": "user",
-                        "content": PROMPT.format(
-                            name=row["name"], tagline=row["tagline"] or "",
-                            category=row["category"] or "n/d",
-                            source=row["source"], points=row["points"],
-                        ),
-                    }],
-                },
-                timeout=60,
-            )
-            r.raise_for_status()
-            text = r.json()["choices"][0]["message"]["content"]
-            data = json.loads(text.replace("```json", "").replace("```", "").strip())
+            data, _, _ = llm.ask_json(PROMPT.format(
+                name=row["name"], tagline=row["tagline"] or "",
+                category=row["category"] or "n/d",
+                source=row["source"], points=row["points"],
+            ))
             conn.execute(
                 """UPDATE products SET niche=?, pain=?, audience=?,
                    br_verdict=?, opportunity_score=? WHERE id=?""",

@@ -85,8 +85,11 @@ def build_html(new_rows, cross_rows) -> str:
 
 def send_email(html_body: str, subject: str) -> bool:
     """Envia via SMTP. Config por variaveis de ambiente:
-    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO
-    (Gmail: smtp.gmail.com:587 com senha de app)"""
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_TO, MAIL_FROM
+    - Resend: smtp.resend.com:587, user "resend", pass = API key,
+      MAIL_FROM=onboarding@resend.dev (sem dominio proprio, MAIL_TO
+      precisa ser o e-mail da conta Resend)
+    - Gmail: smtp.gmail.com:587 com senha de app (MAIL_FROM opcional)"""
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
     if not host or not user:
@@ -95,7 +98,7 @@ def send_email(html_body: str, subject: str) -> bool:
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = user
+    msg["From"] = os.environ.get("MAIL_FROM", user)
     msg["To"] = os.environ.get("MAIL_TO", user)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 

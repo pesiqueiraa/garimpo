@@ -9,6 +9,7 @@ def test_confirm_acha_na_loja_br(monkeypatch):
     monkeypatch.setattr(excavate, "gp_search", fake_search)
     monkeypatch.setattr(excavate, "gp_app",
                         lambda app_id, lang, country: {"score": 3.4, "ratings": 5000})
+    monkeypatch.setattr(excavate.time, "sleep", lambda s: None)
     c = excavate.confirm_on_play_store("rival")
     assert c == {"app_id": "br.com.rival", "name": "Rival Brasil",
                  "store": "br", "rating": 3.4, "ratings_count": 5000}
@@ -26,6 +27,7 @@ def test_confirm_cai_para_loja_us(monkeypatch):
     monkeypatch.setattr(excavate, "gp_search", fake_search)
     monkeypatch.setattr(excavate, "gp_app",
                         lambda app_id, lang, country: {"score": 4.1, "ratings": 90000})
+    monkeypatch.setattr(excavate.time, "sleep", lambda s: None)
     c = excavate.confirm_on_play_store("globalapp")
     assert buscas == ["br", "us"]
     assert c["store"] == "us"
@@ -33,6 +35,7 @@ def test_confirm_cai_para_loja_us(monkeypatch):
 
 def test_confirm_retorna_none_sem_resultado(monkeypatch):
     monkeypatch.setattr(excavate, "gp_search", lambda *a, **kw: [])
+    monkeypatch.setattr(excavate.time, "sleep", lambda s: None)
     assert excavate.confirm_on_play_store("inexistente") is None
 
 

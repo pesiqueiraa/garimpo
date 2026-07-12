@@ -36,8 +36,12 @@ def confirm_on_play_store(search_term: str) -> dict | None:
             hits = gp_search(search_term, lang=lang, country=store, n_hits=3)
         except Exception as e:
             print(f"[escava] busca '{search_term}' ({store}) falhou: {e}")
+            if store == "br":
+                time.sleep(PAUSE_S)
             continue
         if not hits:
+            if store == "br":
+                time.sleep(PAUSE_S)
             continue
         hit = hits[0]
         details = {}

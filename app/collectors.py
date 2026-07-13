@@ -65,7 +65,8 @@ def collect_producthunt(hours: int = 26) -> list[dict]:
     Token gratuito em https://www.producthunt.com/v2/oauth/applications
     (use o 'Developer Token' da sua aplicacao).
     """
-    token = os.environ.get("PH_TOKEN")
+    # strip: secret colado com \n/espaco quebraria o header Authorization
+    token = (os.environ.get("PH_TOKEN") or "").strip()
     if not token:
         print("[producthunt] PH_TOKEN ausente, pulando (veja README)")
         return []

@@ -31,7 +31,8 @@ def ask_json(prompt: str, max_tokens: int = 500,
     1 retry automatico se a resposta nao for JSON valido; tokens dos
     dois attempts sao somados. Erros HTTP propagam (requests.RequestException).
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
+    # strip: secret colado com \n/espaco quebraria o header Authorization
+    api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
     if not api_key:
         raise LLMError("OPENAI_API_KEY ausente")
 

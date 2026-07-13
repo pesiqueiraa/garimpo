@@ -155,22 +155,26 @@ def send_email(html_body: str, subject: str) -> bool:
       MAIL_FROM=onboarding@resend.dev (sem dominio proprio, MAIL_TO
       precisa ser o e-mail da conta Resend)
     - Gmail: smtp.gmail.com:587 com senha de app (MAIL_FROM opcional)"""
-    host = os.environ.get("SMTP_HOST")
-    user = os.environ.get("SMTP_USER")
+    # strip em tudo: secret colado com \n/espaco quebra DNS e headers
+    def _env(name: str, default: str = "") -> str:
+        return (os.environ.get(name) or default).strip()
+
+    host = _env("SMTP_HOST")
+    user = _env("SMTP_USER")
     if not host or not user:
         print("[mail] SMTP nao configurado, relatorio salvo apenas em disco")
         return False
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = os.environ.get("MAIL_FROM", user)
-    msg["To"] = os.environ.get("MAIL_TO", user)
+    msg["From"] = _env("MAIL_FROM", user)
+    msg["To"] = _env("MAIL_TO", user)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        with smtplib.SMTP(host, int(os.environ.get("SMTP_PORT", 587))) as s:
+        with smtplib.SMTP(host, int(_env("SMTP_PORT", "587"))) as s:
             s.starttls()
-            s.login(user, os.environ["SMTP_PASS"])
+            s.login(user, _env("SMTP_PASS"))
             s.send_message(msg)
         print(f"[mail] enviado para {msg['To']}")
         return True

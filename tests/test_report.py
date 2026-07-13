@@ -62,3 +62,39 @@ def test_html_injection_em_clusters_e_sanitized(conn):
 
     # Frequency foi coagido para 0 na insercao, aparece como "0×"
     assert "(0×" in html_out
+
+
+def test_send_email_ignora_whitespace_nos_secrets(monkeypatch):
+    # secrets colados com \n/espaco no final quebravam DNS e headers do e-mail
+    monkeypatch.setenv("SMTP_HOST", "smtp.exemplo.com\n")
+    monkeypatch.setenv("SMTP_PORT", "587")
+    monkeypatch.setenv("SMTP_USER", "resend ")
+    monkeypatch.setenv("SMTP_PASS", "chave\n")
+    monkeypatch.setenv("MAIL_TO", "eu@exemplo.com\n")
+    monkeypatch.setenv("MAIL_FROM", "onboarding@exemplo.com\n")
+    chamadas = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port):
+            chamadas["host"], chamadas["port"] = host, port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, user, pw):
+            chamadas["user"], chamadas["pass"] = user, pw
+
+        def send_message(self, msg):
+            chamadas["to"], chamadas["from"] = msg["To"], msg["From"]
+
+    monkeypatch.setattr(report.smtplib, "SMTP", FakeSMTP)
+    assert report.send_email("<p>oi</p>", "assunto") is True
+    assert chamadas == {"host": "smtp.exemplo.com", "port": 587,
+                        "user": "resend", "pass": "chave",
+                        "to": "eu@exemplo.com", "from": "onboarding@exemplo.com"}

@@ -72,3 +72,17 @@ def test_ask_json_remove_cerca_de_markdown(monkeypatch):
 def test_cost_usd():
     assert llm.cost_usd(1_000_000, 0) == pytest.approx(0.25)
     assert llm.cost_usd(0, 1_000_000) == pytest.approx(2.00)
+
+
+def test_ask_json_ignora_whitespace_na_chave(monkeypatch):
+    # secrets colados com \n no final quebravam o header Authorization
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste\n")
+    headers_capturados = {}
+
+    def fake_post(*a, **kw):
+        headers_capturados.update(kw["headers"])
+        return FakeResponse('{"ok": true}')
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    llm.ask_json("prompt")
+    assert headers_capturados["Authorization"] == "Bearer sk-teste"

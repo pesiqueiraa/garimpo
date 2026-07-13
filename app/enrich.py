@@ -29,15 +29,20 @@ Categoria: {category}
 Fonte: {source} ({points} pontos/votos)"""
 
 
-def enrich_rows(conn, limit: int = 25) -> int:
+def enrich_rows(conn, limit: int = 25, only_id: int | None = None) -> int:
     if not os.environ.get("OPENAI_API_KEY"):
         print("[enrich] OPENAI_API_KEY ausente, pulando enriquecimento")
         return 0
 
-    rows = conn.execute(
-        "SELECT * FROM products WHERE niche IS NULL ORDER BY points DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
+    if only_id is not None:
+        rows = conn.execute(
+            "SELECT * FROM products WHERE id=? AND niche IS NULL", (only_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM products WHERE niche IS NULL ORDER BY points DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
 
     done = 0
     for row in rows:

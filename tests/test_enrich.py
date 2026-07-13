@@ -35,3 +35,16 @@ def test_enrich_sobrevive_a_falha_do_llm(conn, monkeypatch):
 
     monkeypatch.setattr(llm, "ask_json", explode)
     assert enrich.enrich_rows(conn) == 0   # nao levanta excecao
+
+
+def test_enrich_only_id_enriquece_so_um(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    alvo = make_product(conn, "Alvo", score=8.0)
+    outro = make_product(conn, "Outro", score=8.0)
+    conn.execute("UPDATE products SET niche=NULL")
+    conn.commit()
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: (FAKE, 100, 20))
+
+    assert enrich.enrich_rows(conn, only_id=alvo) == 1
+    assert conn.execute("SELECT niche FROM products WHERE id=?", (alvo,)).fetchone()["niche"]
+    assert conn.execute("SELECT niche FROM products WHERE id=?", (outro,)).fetchone()["niche"] is None

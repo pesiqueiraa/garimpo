@@ -5,7 +5,6 @@ Play Store (BR primeiro, US fallback) -> reviews 1-3 estrelas ->
 clusterizacao de dores (LLM) -> angulo de ataque (LLM).
 Reviews cruas nao sao persistidas; so o destilado vai para o banco.
 """
-import json
 import os
 import time
 

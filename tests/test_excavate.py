@@ -1,5 +1,3 @@
-import pytest
-
 from app import db, excavate, llm
 from tests.conftest import make_product
 

@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS dossiers (
 """
 
 
+def _to_int(value) -> int:
+    """Coercao defensiva para int (nunca levanta) — entradas do LLM podem vir malformadas."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "", text.lower())
@@ -190,7 +198,7 @@ def save_pain_clusters(conn: sqlite3.Connection, product_id: int, clusters: list
         """INSERT INTO pain_clusters
            (product_id, theme, frequency, severity, examples, created_at)
            VALUES (?,?,?,?,?,?)""",
-        [(product_id, c["theme"], c.get("frequency", 0), c.get("severity"),
+        [(product_id, c["theme"], _to_int(c.get("frequency", 0)), c.get("severity"),
           json.dumps(c.get("examples", []), ensure_ascii=False), now) for c in clusters],
     )
     conn.commit()

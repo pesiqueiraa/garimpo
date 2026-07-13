@@ -29,7 +29,7 @@ coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → escavação (dossi
    - Y Combinator via espelho público yc-oss (sem chave)
 2. **Dedup** — chave por domínio da URL (ou nome normalizado). Produto visto em **múltiplas fontes** é marcado como sinal forte (`cross_source`).
 3. **Enriquecimento** (opcional, requer `OPENAI_API_KEY`) — LLM classifica: nicho, dor que resolve, público (B2B/B2C), veredito de concorrência BR e score de oportunidade 0-10.
-4. **Escavação** (v1.1, opcional, requer `OPENAI_API_KEY`) — para até 2 produtos/dia com score ≥ 7, o LLM sugere concorrentes, confirma na Play Store (BR primeiro, US fallback), coleta reviews 1-3★, clusteriza as dores e gera um "ângulo de ataque" para tropicalização. Sai como dossiê no relatório.
+4. **Escavação** (v1.1, opcional, requer `OPENAI_API_KEY`) — para até 2 produtos/dia com score ≥ 7, o LLM sugere concorrentes, confirma na Play Store (BR primeiro, US fallback), coleta reviews 1-3★, clusteriza as dores e gera um "ângulo de ataque" para tropicalização. A partir da v1.2, a etapa também busca concorrência real no Google BR (Serper) para um veredito com evidências e, se o score final for ≥ 8, monta um kit de validação (copy de landing, perguntas Mom Test, abordagem de WhatsApp). Sai como dossiê no relatório. Também dá para escavar um produto específico na hora com `python3 -m app.main --investigar "nome ou url"`.
 5. **Relatório** — HTML com cards (nome, tagline, fonte, pontos, score, veredito BR) e a seção de dossiês prontos, salvo em `data/` e enviado por SMTP.
 6. **Automação** — GitHub Actions roda tudo diariamente às 7h (Brasília) de graça e commita o banco de volta no repo.
 
@@ -42,6 +42,7 @@ coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → escavação (dossi
 | LLM | API OpenAI, modelo gpt-5-mini | Classificação e escavação sem custo alto; chamada direta via `requests` |
 | Envio | SMTP via Resend (ou Gmail) | Resend é gratuito p/ volume baixo e não depende de senha de app |
 | Automação | GitHub Actions (cron) | Gratuito, sem servidor |
+| Busca | Serper.dev (REST via `requests`) | Veredito de concorrência BR com resultados reais do Google, sem SDK extra |
 | Dependências | `requests` + `google-play-scraper` | Minimalismo proposital; cada fase adiciona o próprio mínimo |
 
 **Princípios de código adotados:**
@@ -66,6 +67,8 @@ garimpo/
 │   ├── enrich.py              # classificação LLM (opcional)
 │   ├── llm.py                 # cliente OpenAI (gpt-5-mini) via requests
 │   ├── excavate.py            # escavação de concorrentes + dossiê (v1.1)
+│   ├── search.py              # busca real (Serper) para o veredito BR (v1.2)
+│   ├── kit.py                 # kit de validação para dossiês fortes (v1.2)
 │   └── report.py              # HTML do e-mail + envio SMTP
 ├── docs/
 │   ├── contexto.md            # este arquivo
@@ -80,7 +83,7 @@ garimpo/
 **Tabelas da escavação (v1.1):**
 - `competitors` — concorrentes confirmados na Play Store por produto (`app_id`, `name`, `store`, `rating`, `ratings_count`, `reviews_collected`).
 - `pain_clusters` — temas de dor extraídos das reviews 1-3★ (`theme`, `frequency`, `severity`, `examples` em JSON).
-- `dossiers` — um por produto escavado, com `attack_angle`, `cost_usd`, `tokens_in`, `tokens_out`.
+- `dossiers` — um por produto escavado, com `attack_angle`, `cost_usd`, `tokens_in`, `tokens_out` e, desde a v1.2, `br_verdict_final`, `br_evidence` (JSON de links), `score_final` e `kit` (JSON, só quando `score_final >= 8`).
 
 ## 6. Variáveis de ambiente
 
@@ -90,13 +93,14 @@ garimpo/
 | `OPENAI_API_KEY` | Não | Habilita enriquecimento LLM e escavação de concorrentes (dossiê) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` | Não | Habilitam envio do e-mail |
 | `MAIL_FROM` | Não | Remetente do e-mail (obrigatório para Resend sem domínio próprio; opcional no Gmail) |
+| `SERPER_API_KEY` | Não | Habilita busca real (Serper.dev) para o veredito BR do dossiê; sem ela, o veredito continua palpite do LLM |
 
 No GitHub Actions, todas entram como *secrets*.
 
 ## 7. Estado atual
 
 - **v1.1 entregue** — pipeline diário completo (coleta, dedup, enriquecimento, escavação de concorrentes com dossiê, relatório, e-mail) rodando em produção via GitHub Actions.
-- Próxima: **v1.2** (ver ROADMAP.md) — veredito de concorrência BR com busca real, a próxima fronteira de honestidade do produto.
+- **v1.2 entregue** — veredito de concorrência BR com busca real (Serper) e kit de validação automático para dossiês fortes; próxima: congelamento de 30 dias.
 
 ## 8. Direção do produto (resumo do ROADMAP.md)
 
@@ -107,7 +111,7 @@ No GitHub Actions, todas entram como *secrets*.
 
 ## 9. Limitações conhecidas (honestidade > marketing)
 
-- O veredito de concorrência BR ainda é **palpite do LLM**, sem busca na web — serve de triagem, não de decisão. Upgrade previsto na v1.2.
+- O veredito de concorrência BR do **dossiê** agora usa busca real (Serper), com evidências e links — mas o veredito dos **cards do radar diário** (enriquecimento, antes da escavação) continua palpite do LLM, sem busca; serve de triagem, não de decisão.
 - Reviews da Play Store (v1.1) cobrem bem B2C e B2B de pequenos negócios; SaaS enterprise/web-only pode não ter app — nesses casos o dossiê sai sem mapa de dores.
 - Score é heurístico e será recalibrado com feedback de uso (Fase 4).
 - O yc-oss é um espelho comunitário; se sair do ar, a fonte YC precisa de alternativa.

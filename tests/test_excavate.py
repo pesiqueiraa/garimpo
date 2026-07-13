@@ -272,3 +272,24 @@ def test_veredito_sem_score_final_preserva_score(conn, monkeypatch):
     assert prod["opportunity_score"] == 9.0          # COALESCE preservou
     d = db.dossiers_since(conn, "2000-01-01T00:00:00")[0]["dossier"]
     assert d["score_final"] is None and d["kit"] is None   # sem score_final => sem kit
+
+
+def test_confirm_pula_hit_sem_app_id(monkeypatch):
+    monkeypatch.setattr(excavate.time, "sleep", lambda s: None)
+
+    def fake_search(term, lang, country, n_hits):
+        return [{"appId": None, "title": "Tile editorial"},
+                {"appId": "com.real.app", "title": "App Real", "score": 4.0}]
+
+    monkeypatch.setattr(excavate, "gp_search", fake_search)
+    monkeypatch.setattr(excavate, "gp_app",
+                        lambda app_id, lang, country: {"score": 4.0, "ratings": 100})
+    c = excavate.confirm_on_play_store("notion")
+    assert c["app_id"] == "com.real.app"
+
+
+def test_confirm_todos_hits_sem_app_id_retorna_none(monkeypatch):
+    monkeypatch.setattr(excavate.time, "sleep", lambda s: None)
+    monkeypatch.setattr(excavate, "gp_search",
+                        lambda term, lang, country, n_hits: [{"appId": None, "title": "T"}])
+    assert excavate.confirm_on_play_store("qualquer") is None

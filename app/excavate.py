@@ -45,7 +45,11 @@ def confirm_on_play_store(search_term: str) -> dict | None:
             if store == "br":
                 time.sleep(PAUSE_S)
             continue
-        hit = hits[0]
+        hit = next((h for h in hits if h.get("appId")), None)
+        if hit is None:
+            if store == "br":
+                time.sleep(PAUSE_S)
+            continue
         details = {}
         try:
             details = gp_app(hit["appId"], lang=lang, country=store)

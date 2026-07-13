@@ -38,4 +38,5 @@ jobs:
           git config user.email "bot@garimpo"
           git add data/garimpo.db
           git diff --cached --quiet || git commit -m "garimpo: atualiza banco $(date +%F)"
+          git pull --rebase origin main   # remoto pode ter andado durante o run
           git push

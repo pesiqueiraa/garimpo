@@ -37,6 +37,19 @@ def test_enrich_sobrevive_a_falha_do_llm(conn, monkeypatch):
     assert enrich.enrich_rows(conn) == 0   # nao levanta excecao
 
 
+def test_enrich_score_nao_numerico_vira_none(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "Novo", score=8.0)
+    conn.execute("UPDATE products SET niche=NULL WHERE id=?", (pid,))
+    conn.commit()
+    monkeypatch.setattr(llm, "ask_json",
+                        lambda prompt, **kw: (dict(FAKE, opportunity_score="alto"), 100, 20))
+
+    assert enrich.enrich_rows(conn) == 1
+    row = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+    assert row["opportunity_score"] is None
+
+
 def test_enrich_only_id_enriquece_so_um(conn, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
     alvo = make_product(conn, "Alvo", score=8.0)

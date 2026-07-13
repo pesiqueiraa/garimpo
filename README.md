@@ -22,6 +22,8 @@ python3 -m app.main --investigar "nome ou url"
 
 Gera um `data/dossie-<produto>-AAAA-MM-DD.html` avulso.
 
+O produto investigado entra no banco (`source="manual"`) e vai aparecer no radar do e-mail seguinte; para descartar o experimento, `git checkout -- data/garimpo.db` antes de commitar.
+
 ## Rodando localmente
 
 ```bash

@@ -52,11 +52,14 @@ def enrich_rows(conn, limit: int = 25, only_id: int | None = None) -> int:
                 category=row["category"] or "n/d",
                 source=row["source"], points=row["points"],
             ))
+            score = data.get("opportunity_score")
+            if not isinstance(score, (int, float)):
+                score = None
             conn.execute(
                 """UPDATE products SET niche=?, pain=?, audience=?,
                    br_verdict=?, opportunity_score=? WHERE id=?""",
                 (data.get("niche"), data.get("pain"), data.get("audience"),
-                 data.get("br_verdict"), data.get("opportunity_score"), row["id"]),
+                 data.get("br_verdict"), score, row["id"]),
             )
             conn.commit()
             done += 1

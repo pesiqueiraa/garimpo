@@ -92,4 +92,9 @@ def verify_br_competition(product, players_block: str) -> tuple[dict, int, int] 
     if data.get("verdict") not in ("sem_concorrente", "concorrente_fraco", "concorrente_forte"):
         print(f"[busca] veredito invalido do LLM: {data.get('verdict')!r}")
         return None
+
+    sf = data.get("score_final")
+    if sf is not None and not isinstance(sf, (int, float)):
+        print(f"[busca] score_final nao numerico do LLM: {sf!r} — ignorando")
+        data["score_final"] = None
     return data, t_in, t_out

@@ -95,3 +95,14 @@ def test_verify_veredito_invalido_retorna_none(conn, monkeypatch):
     monkeypatch.setattr(llm, "ask_json",
                         lambda prompt, **kw: ({"verdict": "sei_la"}, 10, 5))
     assert search.verify_br_competition(_produto(conn), "nenhum") is None
+
+
+def test_verify_score_final_nao_numerico_vira_none(conn, monkeypatch):
+    monkeypatch.setenv("SERPER_API_KEY", "k")
+    monkeypatch.setattr(search, "search_br",
+                        lambda q, n=8: [{"title": "T", "url": "https://t.com", "snippet": "s"}])
+    veredito = dict(VEREDITO, score_final="muito alto")
+    monkeypatch.setattr(llm, "ask_json", lambda prompt, **kw: (veredito, 10, 5))
+    data, _, _ = search.verify_br_competition(_produto(conn), "nenhum")
+    assert data["score_final"] is None
+    assert data["verdict"] == "concorrente_fraco"

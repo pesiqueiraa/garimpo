@@ -17,6 +17,8 @@ def _load_json(text, expected_type, default):
     except (TypeError, ValueError):
         return default
     return data if isinstance(data, expected_type) else default
+
+
 VERDICT_LABEL = {
     "sem_concorrente": ("🟢 Sem concorrente BR detectado", "#0a7a33"),
     "concorrente_fraco": ("🟡 Concorrente BR fraco", "#a07800"),
@@ -59,7 +61,8 @@ def _dossier_html(d) -> str:
         exemplos = "".join(
             (f"<div style='font-size:12px;color:#666;font-style:italic;margin:2px 0 2px 12px'>"
              f"“{html.escape(e['excerpt'])}” — {html.escape(e['app'])}</div>")
-            for e in json.loads(cl["examples"] or "[]")[:2])
+            for e in _load_json(cl["examples"] or "[]", list, [])[:2]
+            if isinstance(e, dict))
         dores += (f"<div style='margin:8px 0'><b style='font-size:13px'>{html.escape(cl['theme'])}</b> "
                   f"<span style='color:{cor};font-size:12px'>({cl['frequency']}× · {sev})</span>"
                   f"{exemplos}</div>")

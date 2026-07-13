@@ -8,6 +8,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 SOURCE_LABEL = {"hackernews": "Show HN", "producthunt": "Product Hunt", "yc": "Y Combinator"}
+
+
+def _load_json(text, expected_type, default):
+    """Parse defensivo de JSON persistido — render do e-mail nunca quebra."""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return default
+    return data if isinstance(data, expected_type) else default
 VERDICT_LABEL = {
     "sem_concorrente": ("🟢 Sem concorrente BR detectado", "#0a7a33"),
     "concorrente_fraco": ("🟡 Concorrente BR fraco", "#a07800"),
@@ -61,7 +70,9 @@ def _dossier_html(d) -> str:
         vlabel, vcolor = VERDICT_LABEL.get(dos["br_verdict_final"],
                                            (html.escape(dos["br_verdict_final"]), "#666"))
         links = ""
-        for e in json.loads(dos["br_evidence"] or "[]")[:3]:
+        for e in _load_json(dos["br_evidence"] or "[]", list, [])[:3]:
+            if not isinstance(e, dict):
+                continue
             e_url = e.get("url") or ""
             e_title = html.escape(e.get("title") or e_url or "?")
             e_why = html.escape(e.get("why") or "")
@@ -81,10 +92,7 @@ def _dossier_html(d) -> str:
 
     kit_html = ""
     if dos["kit"]:
-        try:
-            k = json.loads(dos["kit"])
-        except ValueError:
-            k = None
+        k = _load_json(dos["kit"], dict, None)
         if k:
             landing = k.get("landing") or {}
             benefits = "".join(f"<li style='margin:2px 0'>{html.escape(str(b))}</li>"

@@ -155,3 +155,48 @@ def test_build_dossier_page(conn):
     page = report.build_dossier_page(d)
     assert page.startswith("<!doctype html>")
     assert "AlvoV12" in page and "Veredito de concorrência" in page
+
+
+def test_json_persistido_corrompido_nao_quebra_render(conn):
+    """Regressão: JSON malformado em br_evidence ou kit não quebra o render."""
+    pid = make_product(conn, "Corrompido", score=9.0)
+    db.save_dossier(conn, pid, "Angulo.", 0.03, 900, 80)
+    # Injetar JSON inválido diretamente no banco (DB layer escapa com json.dumps)
+    conn.execute("UPDATE dossiers SET br_evidence=?, kit=?, br_verdict_final=? WHERE product_id=?",
+                 ("{nao é json", "[]", "concorrente_fraco", pid))
+    conn.commit()
+    html_out = report.build_html([], [], db.dossiers_since(conn, "2000-01-01T00:00:00"))
+    assert "Corrompido" in html_out            # dossiê renderizou
+    assert "Kit de validação" not in html_out  # kit não-dict ignorado
+
+
+def test_br_evidence_elemento_nao_dict_skipped(conn):
+    """Regressão: elemento não-dict em br_evidence é pulado (não causa AttributeError)."""
+    # Simular JSON válido mas com elemento não-dict
+    evid = [{"title": "Válido", "url": "https://example.com", "why": "ok"}, "string_invalida", 123]
+    # Não podemos usar db.save_dossier com dados já stringificados
+    # Então injetar diretamente:
+    pid = make_product(conn, "MixedTypes", score=9.0)
+    db.save_dossier(conn, pid, "Angulo.", 0.03, 900, 80, br_verdict_final="concorrente_fraco")
+    conn.execute(
+        "UPDATE dossiers SET br_evidence=? WHERE product_id=?",
+        (json.dumps(evid, ensure_ascii=False), pid)
+    )
+    conn.commit()
+    html_out = report.build_html([], [], db.dossiers_since(conn, "2000-01-01T00:00:00"))
+    assert "Válido" in html_out              # elemento válido renderiza
+    assert "string_invalida" not in html_out  # string é skipada
+    assert "MixedTypes" in html_out          # dossiê renderizou mesmo com lixo
+
+
+def test_kit_campo_array_em_vez_dict_ignorado(conn):
+    """Regressão: campo kit com array em vez de dict é ignorado (não causa erro)."""
+    pid = make_product(conn, "KitBroken", score=9.0)
+    db.save_dossier(conn, pid, "Angulo.", 0.03, 900, 80)
+    # Injetar kit como array em vez de dict
+    conn.execute("UPDATE dossiers SET kit=? WHERE product_id=?",
+                 (json.dumps(["item1", "item2"], ensure_ascii=False), pid))
+    conn.commit()
+    html_out = report.build_html([], [], db.dossiers_since(conn, "2000-01-01T00:00:00"))
+    assert "KitBroken" in html_out            # dossiê renderizou
+    assert "Kit de validação" not in html_out  # kit array foi ignorado

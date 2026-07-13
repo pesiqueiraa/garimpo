@@ -23,7 +23,7 @@ def _dossier_html(d) -> str:
     name = html.escape(dos["name"])
     tagline = html.escape(dos["tagline"] or "")
     url = dos["url"] or dos["source_url"] or "#"
-    score = dos["opportunity_score"]
+    score = dos["score_final"] if dos["score_final"] is not None else dos["opportunity_score"]
 
     meta = SOURCE_LABEL.get(dos["source"], dos["source"])
     if dos["points"]:
@@ -57,6 +57,52 @@ def _dossier_html(d) -> str:
 
     angle = html.escape(dos["attack_angle"] or "").replace("\n", "<br>")
 
+    if dos["br_verdict_final"]:
+        vlabel, vcolor = VERDICT_LABEL.get(dos["br_verdict_final"],
+                                           (html.escape(dos["br_verdict_final"]), "#666"))
+        links = ""
+        for e in json.loads(dos["br_evidence"] or "[]")[:3]:
+            e_url = e.get("url") or ""
+            e_title = html.escape(e.get("title") or e_url or "?")
+            e_why = html.escape(e.get("why") or "")
+            sufixo = f" — {e_why}" if e_why else ""
+            if e_url.startswith("http"):
+                links += (f"<div style='font-size:12px;margin:2px 0 2px 12px'>"
+                          f"<a href=\"{html.escape(e_url)}\" style='color:#0b57d0'>{e_title}</a>"
+                          f"{sufixo}</div>")
+            else:
+                links += (f"<div style='font-size:12px;margin:2px 0 2px 12px'>"
+                          f"{e_title}{sufixo}</div>")
+        veredito = (f"<div style='font-size:13px;font-weight:600;color:{vcolor}'>{vlabel}</div>"
+                    f"{links}")
+    else:
+        veredito = ("<p style='font-size:12px;color:#888'>"
+                    "palpite do modelo — sem busca real</p>")
+
+    kit_html = ""
+    if dos["kit"]:
+        try:
+            k = json.loads(dos["kit"])
+        except ValueError:
+            k = None
+        if k:
+            landing = k.get("landing") or {}
+            benefits = "".join(f"<li style='margin:2px 0'>{html.escape(str(b))}</li>"
+                               for b in (landing.get("benefits") or []))
+            perguntas = "".join(f"<li style='margin:2px 0'>{html.escape(str(p))}</li>"
+                                for p in (k.get("mom_test") or []))
+            kit_html = (
+                f"<div style='font-size:13px'><b>Landing:</b> {html.escape(landing.get('headline') or '')}</div>"
+                f"<div style='font-size:12px;color:#444'>{html.escape(landing.get('subheadline') or '')}</div>"
+                f"<ul style='font-size:12px;color:#444;margin:4px 0 4px 18px;padding:0'>{benefits}</ul>"
+                f"<div style='font-size:12px'><b>CTA:</b> {html.escape(landing.get('cta') or '')}</div>"
+                f"<div style='font-size:13px;margin-top:8px'><b>Perguntas (Mom Test):</b></div>"
+                f"<ol style='font-size:12px;color:#444;margin:4px 0 4px 18px;padding:0'>{perguntas}</ol>"
+                f"<div style='font-size:13px;margin-top:8px'><b>Abordagem WhatsApp:</b></div>"
+                f"<div style='font-size:12px;color:#444;font-style:italic;"
+                f"border-left:3px solid #ddd;padding-left:8px'>{html.escape(k.get('whatsapp') or '')}</div>"
+            )
+
     def _h3(t):
         return f"<div style='font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin:14px 0 4px'>{t}</div>"
 
@@ -67,8 +113,10 @@ def _dossier_html(d) -> str:
       <div style="font-size:14px;color:#333;margin-top:3px">{tagline}</div>
       {_h3("Tração lá fora")}<div style="font-size:13px;color:#444">{meta}</div>
       {_h3("Players encontrados")}{players}
+      {_h3("🇧🇷 Veredito de concorrência")}{veredito}
       {_h3("Mapa de dores")}{dores or "<p style='font-size:13px;color:#888'>—</p>"}
       {_h3("⚔️ Ângulo de ataque")}<div style="font-size:13px;color:#222;line-height:1.5">{angle}</div>
+      {(_h3("🧰 Kit de validação") + kit_html) if kit_html else ""}
     </div>"""
 
 
@@ -146,6 +194,19 @@ def build_html(new_rows, cross_rows, dossiers=()) -> str:
   {cross_html}
   <p style="color:#aaa;font-size:11px;margin-top:24px">Gerado automaticamente pelo seu garimpo pessoal.</p>
 </body></html>"""
+
+
+def build_dossier_page(d) -> str:
+    """Pagina avulsa com um unico dossie (usada pelo --investigar)."""
+    dos = d["dossier"]
+    return f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dossiê — {html.escape(dos['name'])}</title></head>
+<body style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;margin:0;padding:24px">
+<div style="max-width:640px;margin:0 auto">
+<h1 style="font-size:20px">⛏️ Dossiê — {html.escape(dos['name'])}</h1>
+{_dossier_html(d)}
+</div></body></html>"""
 
 
 def send_email(html_body: str, subject: str) -> bool:

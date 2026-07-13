@@ -16,6 +16,14 @@ def _um_dossie(conn):
     return db.dossiers_since(conn, "2000-01-01T00:00:00")
 
 
+def _dossie_v12(conn, kit=None, evidence=None, verdict="concorrente_fraco", score_final=8.5):
+    pid = make_product(conn, "AlvoV12", score=9.0)
+    db.save_dossier(conn, pid, "Atacar com Pix.", 0.05, 9000, 800,
+                    br_verdict_final=verdict, br_evidence=evidence,
+                    score_final=score_final, kit=kit)
+    return db.dossiers_since(conn, "2000-01-01T00:00:00")
+
+
 def test_build_html_sem_dossies_continua_igual(conn):
     html_out = report.build_html([], [])
     assert "Dossiês prontos" not in html_out
@@ -98,3 +106,52 @@ def test_send_email_ignora_whitespace_nos_secrets(monkeypatch):
     assert chamadas == {"host": "smtp.exemplo.com", "port": 587,
                         "user": "resend", "pass": "chave",
                         "to": "eu@exemplo.com", "from": "onboarding@exemplo.com"}
+
+
+def test_dossie_com_veredito_real_renderiza_links(conn):
+    evid = [{"title": "Rival <b>BR</b>", "url": "https://rival.com.br", "why": "player & local"}]
+    html_out = report.build_html([], [], _dossie_v12(conn, evidence=evid))
+    assert "Veredito de concorrência" in html_out
+    assert "Concorrente BR fraco" in html_out
+    assert 'href="https://rival.com.br"' in html_out
+    assert "Rival &lt;b&gt;BR&lt;/b&gt;" in html_out      # title escapado
+    assert "player &amp; local" in html_out               # why escapado
+    assert "palpite do modelo" not in html_out
+
+
+def test_dossie_sem_veredito_mostra_palpite(conn):
+    pid = make_product(conn, "SoV11", score=9.0)
+    db.save_dossier(conn, pid, "Angulo.", 0.03, 900, 80)
+    html_out = report.build_html([], [], db.dossiers_since(conn, "2000-01-01T00:00:00"))
+    assert "palpite do modelo — sem busca real" in html_out
+
+
+def test_evidencia_sem_http_nao_vira_link(conn):
+    evid = [{"title": "Suspeito", "url": "javascript:alert(1)", "why": "x"}]
+    html_out = report.build_html([], [], _dossie_v12(conn, evidence=evid))
+    assert "javascript:alert(1)" not in html_out
+    assert "Suspeito" in html_out                          # aparece como texto
+
+
+def test_dossie_renderiza_kit(conn):
+    kit = {"landing": {"headline": "Oficinas sem calote", "subheadline": "Sub",
+                       "benefits": ["b1", "b2", "b3"], "cta": "Lista de espera"},
+           "mom_test": [f"pergunta {i}" for i in range(5)],
+           "whatsapp": "Oi grupo, alguem ja passou por isso?"}
+    html_out = report.build_html([], [], _dossie_v12(conn, kit=kit))
+    assert "Kit de validação" in html_out
+    assert "Oficinas sem calote" in html_out
+    assert html_out.count("pergunta ") == 5
+    assert "Oi grupo" in html_out
+
+
+def test_score_final_substitui_badge(conn):
+    html_out = report.build_html([], [], _dossie_v12(conn, score_final=8.0))
+    assert "8/10" in html_out
+
+
+def test_build_dossier_page(conn):
+    d = _dossie_v12(conn)[0]
+    page = report.build_dossier_page(d)
+    assert page.startswith("<!doctype html>")
+    assert "AlvoV12" in page and "Veredito de concorrência" in page

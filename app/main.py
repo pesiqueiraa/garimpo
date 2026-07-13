@@ -63,8 +63,9 @@ def investigate(term: str, conn=None) -> int:
         db.upsert(conn, {"name": term,
                          "url": term if term.startswith("http") else None,
                          "source": "manual", "points": 0})
-        row = conn.execute("SELECT * FROM products WHERE name=?", (term,)).fetchone()
-        print(f"[investigar] produto novo criado: '{term}'")
+        key = db.dedup_key(term, term if term.startswith("http") else None)
+        row = conn.execute("SELECT * FROM products WHERE dedup_key=?", (key,)).fetchone()
+        print(f"[investigar] produto encontrado/criado: '{row['name']}'")
     if row["niche"] is None:
         enrich.enrich_rows(conn, only_id=row["id"])
         row = conn.execute("SELECT * FROM products WHERE id=?", (row["id"],)).fetchone()
@@ -72,8 +73,11 @@ def investigate(term: str, conn=None) -> int:
     if not excavate.investigate(conn, row["id"]):
         return 1
 
-    d = next(x for x in db.dossiers_since(conn, "2000-01-01T00:00:00")
-             if x["dossier"]["product_id"] == row["id"])
+    d = next((x for x in db.dossiers_since(conn, "2000-01-01T00:00:00")
+              if x["dossier"]["product_id"] == row["id"]), None)
+    if d is None:
+        print("[investigar] dossiê não encontrado após escavação")
+        return 1
     slug = re.sub(r"[^a-z0-9]+", "-", row["name"].lower()).strip("-")[:40] or "produto"
     out = db.DB_PATH.parent / f"dossie-{slug}-{date.today().isoformat()}.html"
     out.parent.mkdir(exist_ok=True)

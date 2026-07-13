@@ -44,3 +44,29 @@ def test_investigar_falha_retorna_1(conn, monkeypatch, tmp_path):
     make_product(conn, "Quebrado", score=7.0)
     monkeypatch.setattr(excavate, "investigate", lambda c, pid: False)
     assert main.investigate("Quebrado", conn=conn) == 1
+
+
+def test_investigar_termo_que_colide_no_dedup(conn, monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "garimpo.db")
+    # Cria produto com nome "FooApp" (sem URL) -> dedup_key = "name:fooapp"
+    db.upsert(conn, {
+        "name": "FooApp",
+        "url": None,
+        "source": "manual",
+        "points": 0,
+    })
+    pid = conn.execute("SELECT id FROM products WHERE name=?", ("FooApp",)).fetchone()["id"]
+    conn.execute(
+        "UPDATE products SET niche='teste', opportunity_score=7.0 WHERE id=?",
+        (pid,),
+    )
+    conn.commit()
+
+    monkeypatch.setattr(enrich, "enrich_rows", lambda c, limit=25, only_id=None: 0)
+    monkeypatch.setattr(excavate, "investigate", _stub_investigate_ok)
+
+    # "Foo-App!" não bate por igualdade nem LIKE, mas normaliza p/ mesmo dedup_key "name:fooapp"
+    rc = main.investigate("Foo-App!", conn=conn)
+    assert rc == 0
+    n = conn.execute("SELECT COUNT(*) c FROM products").fetchone()["c"]
+    assert n == 1   # não duplicou nem crashou

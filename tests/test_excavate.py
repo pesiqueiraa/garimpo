@@ -249,3 +249,26 @@ def test_investigate_falha_retorna_false(conn, monkeypatch, capsys):
 def test_investigate_produto_inexistente(conn, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
     assert excavate.investigate(conn, 99999) is False
+
+
+def test_veredito_sem_score_final_preserva_score(conn, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-teste")
+    pid = make_product(conn, "SemScore", score=9.0)
+    _mock_llm_ok(monkeypatch)
+    _mock_store_ok(monkeypatch)
+    veredito_sem_score = {k: v for k, v in VEREDITO.items() if k != "score_final"}
+
+    from app import kit as kit_mod
+    from app import search as search_mod
+    monkeypatch.setattr(search_mod, "verify_br_competition",
+                        lambda product, players_block: (veredito_sem_score, 200, 30))
+    monkeypatch.setattr(kit_mod, "build_kit",
+                        lambda product, cb, vb: (KIT_OK, 300, 40))
+
+    assert excavate.excavate_all(conn) == 1
+    prod = conn.execute("SELECT br_verdict, opportunity_score FROM products WHERE id=?",
+                        (pid,)).fetchone()
+    assert prod["br_verdict"] == "concorrente_fraco"
+    assert prod["opportunity_score"] == 9.0          # COALESCE preservou
+    d = db.dossiers_since(conn, "2000-01-01T00:00:00")[0]["dossier"]
+    assert d["score_final"] is None and d["kit"] is None   # sem score_final => sem kit

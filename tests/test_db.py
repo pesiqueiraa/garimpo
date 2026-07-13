@@ -84,3 +84,52 @@ def test_dossiers_since_respeita_cutoff(conn):
     pid = make_product(conn, "Antigo", score=9.0)
     db.save_dossier(conn, pid, "angulo", 0.01, 100, 10)
     assert db.dossiers_since(conn, "2999-01-01T00:00:00") == []
+
+
+def test_dossiers_ganha_colunas_v12(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(dossiers)")}
+    assert {"br_verdict_final", "br_evidence", "score_final", "kit"} <= cols
+
+
+def test_migracao_dossiers_em_banco_v11(tmp_path):
+    # simula banco da v1.1: tabela dossiers sem as colunas novas
+    import sqlite3
+    path = tmp_path / "v11.db"
+    raw = sqlite3.connect(path)
+    raw.execute("""CREATE TABLE dossiers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER UNIQUE NOT NULL,
+        attack_angle TEXT, cost_usd REAL, tokens_in INTEGER,
+        tokens_out INTEGER, created_at TEXT NOT NULL)""")
+    raw.commit()
+    raw.close()
+
+    c = db.connect(path)
+    cols = {r[1] for r in c.execute("PRAGMA table_info(dossiers)")}
+    assert {"br_verdict_final", "br_evidence", "score_final", "kit"} <= cols
+    c.close()
+
+
+def test_save_dossier_retrocompativel(conn):
+    pid = make_product(conn, "SemV12", score=9.0)
+    db.save_dossier(conn, pid, "angulo", 0.01, 100, 10)
+    row = conn.execute("SELECT * FROM dossiers WHERE product_id=?", (pid,)).fetchone()
+    assert row["attack_angle"] == "angulo"
+    assert row["br_verdict_final"] is None and row["kit"] is None
+    assert row["score_final"] is None and row["br_evidence"] is None
+
+
+def test_save_dossier_com_campos_v12(conn):
+    pid = make_product(conn, "ComV12", score=9.0)
+    db.save_dossier(
+        conn, pid, "angulo", 0.02, 200, 20,
+        br_verdict_final="concorrente_fraco",
+        br_evidence=[{"title": "Rival BR", "url": "https://rival.com.br", "why": "player local"}],
+        score_final=8.5,
+        kit={"landing": {"headline": "H"}, "mom_test": ["p"] * 5, "whatsapp": "oi"},
+    )
+    row = conn.execute("SELECT * FROM dossiers WHERE product_id=?", (pid,)).fetchone()
+    assert row["br_verdict_final"] == "concorrente_fraco"
+    assert row["score_final"] == 8.5
+    assert json.loads(row["br_evidence"])[0]["url"] == "https://rival.com.br"
+    assert json.loads(row["kit"])["landing"]["headline"] == "H"

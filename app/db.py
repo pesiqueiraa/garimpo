@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS dossiers (
     cost_usd REAL,
     tokens_in INTEGER,
     tokens_out INTEGER,
+    br_verdict_final TEXT,           -- veredito com busca real (v1.2)
+    br_evidence TEXT,                -- JSON: [{"title","url","why"}]
+    score_final REAL,
+    kit TEXT,                        -- JSON: {"landing","mom_test","whatsapp"}
     created_at TEXT NOT NULL
 );
 """
@@ -148,6 +152,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE products ADD COLUMN dig_attempts INTEGER DEFAULT 0")
     conn.commit()
 
+    dcols = {r[1] for r in conn.execute("PRAGMA table_info(dossiers)")}
+    for col, tipo in (("br_verdict_final", "TEXT"), ("br_evidence", "TEXT"),
+                      ("score_final", "REAL"), ("kit", "TEXT")):
+        if col not in dcols:
+            conn.execute(f"ALTER TABLE dossiers ADD COLUMN {col} {tipo}")
+    conn.commit()
+
 
 def dig_queue(conn: sqlite3.Connection, limit: int = 2) -> list[sqlite3.Row]:
     """Produtos elegiveis para escavacao, melhores primeiro."""
@@ -205,12 +216,22 @@ def save_pain_clusters(conn: sqlite3.Connection, product_id: int, clusters: list
 
 
 def save_dossier(conn: sqlite3.Connection, product_id: int, attack_angle: str,
-                 cost_usd: float, tokens_in: int, tokens_out: int) -> None:
+                 cost_usd: float, tokens_in: int, tokens_out: int,
+                 br_verdict_final: str | None = None,
+                 br_evidence: list | None = None,
+                 score_final: float | None = None,
+                 kit: dict | None = None) -> None:
     conn.execute(
         """INSERT OR REPLACE INTO dossiers
-           (product_id, attack_angle, cost_usd, tokens_in, tokens_out, created_at)
-           VALUES (?,?,?,?,?,?)""",
-        (product_id, attack_angle, cost_usd, tokens_in, tokens_out, _now()),
+           (product_id, attack_angle, cost_usd, tokens_in, tokens_out,
+            br_verdict_final, br_evidence, score_final, kit, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (product_id, attack_angle, cost_usd, tokens_in, tokens_out,
+         br_verdict_final,
+         json.dumps(br_evidence, ensure_ascii=False) if br_evidence is not None else None,
+         score_final,
+         json.dumps(kit, ensure_ascii=False) if kit is not None else None,
+         _now()),
     )
     conn.commit()
 

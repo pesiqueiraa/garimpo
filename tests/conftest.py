@@ -26,3 +26,9 @@ def make_product(conn, name="FooApp", score=8.0, points=50):
     )
     conn.commit()
     return conn.execute("SELECT id FROM products WHERE name=?", (name,)).fetchone()["id"]
+
+
+@pytest.fixture(autouse=True)
+def _sem_serper(monkeypatch):
+    """Nenhum teste usa Serper real; quem precisa da chave seta explicitamente."""
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)

@@ -2,7 +2,7 @@
 
 Fluxo por produto: sugestao de concorrentes (LLM) -> confirmacao na
 Play Store (BR primeiro, US fallback) -> reviews 1-3 estrelas ->
-clusterizacao de dores (LLM) -> angulo de ataque (LLM).
+clusterizacao de dores (LLM) -> veredito BR real (Serper) -> angulo de ataque (LLM) -> kit de validacao (LLM, score >= 8).
 Reviews cruas nao sao persistidas; so o destilado vai para o banco.
 """
 import os
@@ -13,7 +13,7 @@ from google_play_scraper import reviews as gp_reviews
 from google_play_scraper import search as gp_search
 from google_play_scraper import Sort
 
-from app import db, llm
+from app import db, kit, llm, search
 
 MAX_DOSSIERS_PER_RUN = 2
 REVIEWS_PER_STAR = 70
@@ -21,6 +21,7 @@ REVIEW_CHAR_LIMIT = 300
 CLUSTER_REVIEW_CAP = 150
 PAUSE_S = 1.5
 COST_CEILING_USD = 0.25
+KIT_SCORE_MIN = 8
 
 STORE_LANG = {"br": "pt", "us": "en"}
 
@@ -117,6 +118,7 @@ validados la fora para o Brasil (Pix, WhatsApp, nota fiscal, Simples Nacional).
 Produto original: {name} — {tagline} (nicho: {niche})
 Players encontrados na Play Store: {players_block}
 Mapa de dores extraido de reviews 1-3 estrelas: {clusters_block}
+Concorrencia no Google BR (busca real): {search_block}
 
 Escreva o "angulo de ataque" para um empreendedor brasileiro: quais dores
 negligenciadas atacar e como adaptar ao Brasil. Um paragrafo denso (max 120
@@ -178,22 +180,62 @@ def _excavate_one(conn, product) -> None:
         f"{c['theme']} ({c['frequency']}x, {c['severity']})" for c in clusters)
         or "sem dados de reviews")
 
+    verdict = None
+    vres = search.verify_br_competition(product, players_block)
+    if vres:
+        verdict, t_in, t_out = vres
+        tokens["in"] += t_in; tokens["out"] += t_out
+        _check_budget(tokens)
+        conn.execute(
+            """UPDATE products SET br_verdict=?,
+               opportunity_score=COALESCE(?, opportunity_score) WHERE id=?""",
+            (verdict["verdict"], verdict.get("score_final"), product["id"]))
+        conn.commit()
+
+    search_block = ("; ".join(
+        f"{e.get('title', '?')} ({e.get('url', '')})"
+        for e in (verdict or {}).get("evidence", []))
+        or "sem busca real — considere apenas os dados acima")
+    if verdict and verdict.get("rationale"):
+        search_block += f" | veredito: {verdict['verdict']} — {verdict['rationale']}"
+
     data, t_in, t_out = llm.ask_json(
         ANGLE_PROMPT.format(name=product["name"], tagline=product["tagline"] or "",
                             niche=product["niche"] or "n/d",
-                            players_block=players_block, clusters_block=clusters_block),
+                            players_block=players_block, clusters_block=clusters_block,
+                            search_block=search_block),
         max_tokens=1500, reasoning_effort="medium")
     tokens["in"] += t_in; tokens["out"] += t_out
     _check_budget(tokens)
+    attack_angle = data.get("attack_angle", "")
+
+    kit_data = None
+    score_final = (verdict or {}).get("score_final")
+    if score_final is not None and score_final >= KIT_SCORE_MIN:
+        kres = kit.build_kit(product, clusters_block,
+                             f"{verdict['verdict']}: {verdict.get('rationale', '')}")
+        if kres:
+            kit_data, t_in, t_out = kres
+            tokens["in"] += t_in; tokens["out"] += t_out
+            _check_budget(tokens)
 
     cost = llm.cost_usd(tokens["in"], tokens["out"])
     db.save_competitors(conn, product["id"], competitors)
     db.save_pain_clusters(conn, product["id"], clusters)
-    db.save_dossier(conn, product["id"], data.get("attack_angle", ""),
-                    cost, tokens["in"], tokens["out"])
+    db.save_dossier(conn, product["id"], attack_angle,
+                    cost, tokens["in"], tokens["out"],
+                    br_verdict_final=verdict["verdict"] if verdict else None,
+                    br_evidence=verdict.get("evidence") if verdict else None,
+                    score_final=score_final,
+                    kit=kit_data)
     db.mark_dig(conn, product["id"], "done")
+    extras = []
+    if verdict:
+        extras.append(f"veredito {verdict['verdict']}")
+    if kit_data:
+        extras.append("kit gerado")
     print(f"[escava] dossie de '{product['name']}': {len(competitors)} players, "
-          f"{len(clusters)} dores, US${cost:.4f}")
+          f"{len(clusters)} dores{', ' + ', '.join(extras) if extras else ''}, US${cost:.4f}")
 
 
 def excavate_all(conn) -> int:
@@ -218,3 +260,20 @@ def excavate_all(conn) -> int:
             print(f"[escava] falhou para '{product['name']}': {e}")
             db.record_dig_failure(conn, product["id"])
     return done
+
+
+def investigate(conn, product_id: int) -> bool:
+    """Escava um produto especifico na hora — ignora fila, score e limite diario."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("[escava] OPENAI_API_KEY ausente, impossivel investigar")
+        return False
+    product = conn.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+    if product is None:
+        print(f"[escava] produto id={product_id} nao existe")
+        return False
+    try:
+        _excavate_one(conn, product)
+        return True
+    except Exception as e:
+        print(f"[escava] investigacao de '{product['name']}' falhou: {e}")
+        return False

@@ -20,101 +20,73 @@ Em uma frase: **um radar diário de oportunidades de SaaS para o mercado brasile
 ## 3. Como funciona (pipeline)
 
 ```
-coleta (APIs) → SQLite (dedup) → enriquecimento (LLM) → escavação (dossiê) → relatório HTML → e-mail diário
+coleta → resolução por empresa → leitura do site → fatos (LLM) → score em código
+→ sinais de tração → feedback → fila → escavação → revisitas → Issues → e-mail
 ```
 
-1. **Coleta** — três fontes na v1.0:
-   - Show HN via API pública da Algolia (sem chave)
-   - Product Hunt via API GraphQL oficial (requer `PH_TOKEN`)
-   - Y Combinator via espelho público yc-oss (sem chave)
-2. **Dedup** — chave por domínio da URL (ou nome normalizado). Produto visto em **múltiplas fontes** é marcado como sinal forte (`cross_source`).
-3. **Enriquecimento** (opcional, requer `OPENAI_API_KEY`) — LLM classifica: nicho, dor que resolve, público (B2B/B2C), veredito de concorrência BR e score de oportunidade 0-10.
-4. **Escavação** (v1.1, opcional, requer `OPENAI_API_KEY`) — para até 2 produtos/dia com score ≥ 7, o LLM sugere concorrentes, confirma na Play Store (BR primeiro, US fallback), coleta reviews 1-3★, clusteriza as dores e gera um "ângulo de ataque" para tropicalização. A partir da v1.2, a etapa também busca concorrência real no Google BR (Serper) para um veredito com evidências e, se o score final for ≥ 8, monta um kit de validação (copy de landing, perguntas Mom Test, abordagem de WhatsApp). Sai como dossiê no relatório. Também dá para escavar um produto específico na hora com `python3 -m app.main --investigar "nome ou url"`.
-5. **Relatório** — HTML com cards (nome, tagline, fonte, pontos, score, veredito BR) e a seção de dossiês prontos, salvo em `data/` e enviado por SMTP.
-6. **Automação** — GitHub Actions roda tudo diariamente às 7h (Brasília) de graça e commita o banco de volta no repo.
+1. **Coleta** — fontes de descoberta (Show HN, Launch HN, Product Hunt, lotes novos do YC) e fontes com prova de tração (empresas antigas do YC que cresceram, TrustMRR com receita verificada, gap do top faturamento da App Store EUA × Brasil).
+2. **Resolução** — tudo vira evento de uma **empresa** (`site_key`: domínio registrável, ou host + caminho em plataformas como GitHub, ou nome normalizado). Redirects do Product Hunt são resolvidos ao ler o site e fundem duplicatas.
+3. **Leitura do site** — home e página de preços: texto para o LLM, preço mínimo, plano grátis, venda self-serve ou por demo, hash da página de preços (detecta mudança de preço). Wayback dá a idade do domínio.
+4. **Fatos (LLM)** — extração com JSON Schema: o que é, quem paga, público, tipo de negócio, trilhos locais exigidos (pagamento, fiscal, WhatsApp, Open Finance, governo, idioma, regulação), flags de descarte, CNAE do cliente brasileiro, palavras-chave em português e espanhol. **O LLM não dá nota.**
+5. **Score em código** — subnotas de 1 a 5 (tração, tropicalizabilidade, timing, fit, gap) ponderadas em 0-10; descarte zera. Pesos em `config/pesos.toml`, preferências em `config/perfil.toml`, catalisadores em `config/catalisadores.toml`.
+6. **Sinais de tração** — para as candidatas: tamanho de equipe e status no YC, vagas abertas (Greenhouse/Lever/Ashby), ranking Tranco, captações na SEC (Form D).
+7. **Feedback** — 👍 👎 👀 do e-mail e labels `status:*` das Issues mudam o status e ajustam o fit por similaridade (embeddings) com o que o dono curtiu ou descartou.
+8. **Fila e escavação** — fila com prioridade, orçamento e expiração. A escavação gera o dossiê: concorrentes na Play Store e App Store com avaliações 1-3★, busca no Google BR, Reclame Aqui, G2 e América Latina, mapa permanente de concorrentes brasileiros, dores clusterizadas, TAM por CNAE (opcional), veredito com evidências, score posterior e ângulo de ataque. Kit de validação para nota ≥ 8 e para o melhor dossiê da semana.
+9. **Revisitas** — D+30, D+90 e D+180: site, sinais e score de novo; quem ganhou tração é promovido para a fila.
+10. **Entrega** — dossiês viram Issues no GitHub; e-mail diário curto e, aos domingos, e-mail semanal com temas em alta (agrupamento por embeddings), quem ganhou tração, kit da semana, fila, feedback e saúde das fontes.
+11. **Automação** — GitHub Actions às 05:37 de Brasília; o banco vive no branch `data`.
 
 ## 4. Stack e decisões técnicas
 
 | Decisão | Escolha | Racional |
 |---|---|---|
 | Linguagem | Python 3.12 | Ecossistema de scraping/dados; familiaridade |
-| Banco | SQLite (arquivo no repo) | Zero infra; volume pequeno; versionado junto do código |
-| LLM | API OpenAI, modelo gpt-5-mini | Classificação e escavação sem custo alto; chamada direta via `requests` |
-| Envio | SMTP via Resend (ou Gmail) | Resend é gratuito p/ volume baixo e não depende de senha de app |
+| Banco | SQLite no branch `data` | Zero infra; histórico do código limpo; migrações numeradas |
+| LLM | OpenAI gpt-5-mini (+ text-embedding-3-small) | Extração e escavação baratas; JSON Schema; cache por hash |
+| Nota | Código (`score.py`) | A v1 com nota do LLM colapsou 405 de 519 produtos em 6 ou 7 |
+| Config | TOML (`tomllib`) | Editável à mão, sem dependência nova |
+| Envio | SMTP via Resend (ou Gmail) | Gratuito para volume baixo |
+| Dossiês | Issues do GitHub | Labels viram feedback; quadro de projeto de graça |
 | Automação | GitHub Actions (cron) | Gratuito, sem servidor |
-| Busca | Serper.dev (REST via `requests`) | Veredito de concorrência BR com resultados reais do Google, sem SDK extra |
-| Dependências | `requests` + `google-play-scraper` | Minimalismo proposital; cada fase adiciona o próprio mínimo |
+| Busca | Serper.dev | Google BR, Reclame Aqui, G2 e LatAm com o mesmo cliente |
+| Dependências | `requests` + `google-play-scraper` | Minimalismo proposital |
 
-**Princípios de código adotados:**
-- API oficial ou RSS sempre antes de scraping; scraping só leve, com pausas, 1x/dia.
-- Falha graciosa: fonte que quebra loga e é pulada, o pipeline nunca morre por causa de uma fonte.
-- Toda chave/credencial é opcional: sem `PH_TOKEN` pula Product Hunt, sem `OPENAI_API_KEY` pula enriquecimento e escavação, sem SMTP salva o HTML só em disco.
-- A escavação nunca derruba o pipeline: falha de um produto (orçamento estourado, erro de rede) é logada e pulada; o relatório sai sempre.
-- Custo-alvo: centavos por dia.
+**Princípios de código:** API oficial ou RSS antes de scraping; falha graciosa por etapa; toda credencial opcional; custo perto de zero com teto por execução e por dossiê; LLM extrai fatos e escreve texto, nunca dá nota.
 
 ## 5. Estrutura do repositório
 
-```
-garimpo/
-├── requirements.txt
-├── requirements-dev.txt       # + pytest, para rodar a suíte
-├── README.md                  # setup e instruções operacionais
-├── ROADMAP.md                 # fases do produto e critérios de pronto
-├── app/
-│   ├── main.py                # orquestra o pipeline (--no-mail para testar)
-│   ├── collectors.py          # Show HN, Product Hunt, YC
-│   ├── db.py                  # SQLite, schema/migração, dedup, consultas
-│   ├── enrich.py              # classificação LLM (opcional)
-│   ├── llm.py                 # cliente OpenAI (gpt-5-mini) via requests
-│   ├── excavate.py            # escavação de concorrentes + dossiê (v1.1)
-│   ├── search.py              # busca real (Serper) para o veredito BR (v1.2)
-│   ├── kit.py                 # kit de validação para dossiês fortes (v1.2)
-│   └── report.py              # HTML do e-mail + envio SMTP
-├── docs/
-│   ├── contexto.md            # este arquivo
-│   └── roadmap.md
-├── tests/                     # suíte pytest (unit, com mocks de rede/LLM)
-├── data/                      # garimpo.db + relatórios gerados
-└── .github/workflows/daily.yml
-```
+Ver o mapa de módulos em `docs/v2-arquitetura.md`. Resumo: `app/cli.py` orquestra; `app/db/` concentra todo o SQL; `app/sources/` e `app/signals/` trazem dados; `app/extract.py` e `app/score.py` transformam em nota; `app/dig/` escava; `app/deliver/` entrega; `config/` guarda pesos, perfil, fontes e catalisadores.
 
-**Schema atual (tabela `products`):** `dedup_key`, `name`, `tagline`, `url`, `source`, `source_url`, `points`, `category`, `first_seen`, `last_seen`, `seen_count`, `sources_seen`, campos de enriquecimento (`niche`, `pain`, `audience`, `br_verdict`, `opportunity_score`) e campos de escavação (`dig_status`, `dig_attempts`, adicionados por migração leve em `db.py`).
-
-**Tabelas da escavação (v1.1):**
-- `competitors` — concorrentes confirmados na Play Store por produto (`app_id`, `name`, `store`, `rating`, `ratings_count`, `reviews_collected`).
-- `pain_clusters` — temas de dor extraídos das reviews 1-3★ (`theme`, `frequency`, `severity`, `examples` em JSON).
-- `dossiers` — um por produto escavado, com `attack_angle`, `cost_usd`, `tokens_in`, `tokens_out` e, desde a v1.2, `br_verdict_final`, `br_evidence` (JSON de links), `score_final` e `kit` (JSON, só quando `score_final >= 8`).
+**Schema (v2):** `companies`, `events`, `observations`, `site_pages`, `extractions`, `scores`, `dossiers`, `app_competitors`, `pain_clusters`, `br_competitors`, `br_competitor_links`, `feedback`, `embeddings`, `trends`, `llm_cache`, `runs`. As tabelas da v1 ficaram como `legacy_*` (só leitura).
 
 ## 6. Variáveis de ambiente
 
 | Variável | Obrigatória? | Função |
 |---|---|---|
-| `PH_TOKEN` | Não | Habilita coleta do Product Hunt |
-| `OPENAI_API_KEY` | Não | Habilita enriquecimento LLM e escavação de concorrentes (dossiê) |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` | Não | Habilitam envio do e-mail |
-| `MAIL_FROM` | Não | Remetente do e-mail (obrigatório para Resend sem domínio próprio; opcional no Gmail) |
-| `SERPER_API_KEY` | Não | Habilita busca real (Serper.dev) para o veredito BR do dossiê; sem ela, o veredito continua palpite do LLM |
-
-No GitHub Actions, todas entram como *secrets*.
+| `OPENAI_API_KEY` | Não | Extração, escavação, tendências |
+| `SERPER_API_KEY` | Não | Busca real (Google BR, Reclame Aqui, G2, LatAm) |
+| `PH_TOKEN` | Não | Product Hunt |
+| `GITHUB_TOKEN` | Não | Dossiês como Issues e leitura de feedback (o Actions fornece) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` / `MAIL_FROM` | Não | E-mail |
 
 ## 7. Estado atual
 
-- **v1.1 entregue** — pipeline diário completo (coleta, dedup, enriquecimento, escavação de concorrentes com dossiê, relatório, e-mail) rodando em produção via GitHub Actions.
-- **v1.2 entregue** — veredito de concorrência BR com busca real (Serper) e kit de validação automático para dossiês fortes; próxima: congelamento de 30 dias.
+- **v1.0-v1.2 entregues** (julho/2026) e usadas de 12/07 a 22/08/2026, quando o workflow foi desligado manualmente. O `DIARIO.md` do congelamento ficou em branco.
+- **Dados da v1:** 519 produtos (241 Show HN, 277 YC, 1 Product Hunt), score colapsado em 6-7, 71 dossiês, nenhum kit gerado (o kit exigia nota ≥ 8, que nunca saiu), custo total de US$0,46.
+- **v2 (outubro/2026)** — refatoração completa decidida pelo dono para atacar esses problemas: empresa como unidade, nota em código, descarte, sinais de tração, revisitas, escavação ampliada, Issues, feedback, tendências e operação com branch `data`.
 
-## 8. Direção do produto (resumo do ROADMAP.md)
+## 8. Direção do produto
 
-- **Fase 1 (MVP completo):** escavação de concorrentes via reviews 1-3★ da Play Store (`google-play-scraper`), clusterização de dores por LLM, dossiê por oportunidade com "ângulo de ataque", veredito de concorrência BR com busca real (Serper/Tavily) e kit de validação automático (copy de landing, perguntas Mom Test, mensagem de abordagem).
-- **Congelamento de 30 dias** após o MVP: só uso real e 1 validação na rua. As anotações do período reordenam o resto.
-- **Fases 2-5:** mais fontes de sinal (Reddit, GitHub Trending, RSS, detector de aquisição/morte) → inteligência de mercado (Google Trends, TAM de guerrilha, análise de pricing) → aprendizado (feedback 👍/👎, cofre de ideias, lista de caça) → dashboard criativo por último, de propósito.
-- **Fase 6 (opcional):** produtização como SaaS de assinatura.
+Ver `docs/roadmap.md`. A v2 antecipou partes das fases 2 a 4 (fontes de tração, TAM, feedback, tendências). Continuam no roadmap: Reddit, GitHub Trending, RSS de newsletters, detector de aquisição/morte, Google Trends, análise de pricing comparada, cofre de ideias, lista de caça e dashboard.
 
 ## 9. Limitações conhecidas (honestidade > marketing)
 
-- O veredito de concorrência BR do **dossiê** agora usa busca real (Serper), com evidências e links — mas o veredito dos **cards do radar diário** (enriquecimento, antes da escavação) continua palpite do LLM, sem busca; serve de triagem, não de decisão.
-- Reviews da Play Store (v1.1) cobrem bem B2C e B2B de pequenos negócios; SaaS enterprise/web-only pode não ter app — nesses casos o dossiê sai sem mapa de dores.
-- Score é heurístico e será recalibrado com feedback de uso (Fase 4).
-- O yc-oss é um espelho comunitário; se sair do ar, a fonte YC precisa de alternativa.
+- Score, TAM e veredito são heurísticas. O score só fica bom com o golden set rotulado pelo dono.
+- TrustMRR não tem API oficial: o parser é leitura leve de páginas públicas e pode quebrar.
+- Vagas por "slug" do domínio podem pegar a empresa errada; Form D por nome também (sinais fracos, pesam pouco).
+- As fontes foram desenvolvidas sem acesso à rede (formatos documentados + testes simulados): a primeira execução real é a validação de verdade — o rodapé de saúde do e-mail mostra fonte zerada.
+- Reviews de loja cobrem bem B2C e B2B de pequenos negócios; SaaS só web depende do Reclame Aqui e do G2.
+- O yc-oss é um espelho comunitário; se sair do ar, as fontes do YC param (com alerta).
 
 ## 10. Filosofia do projeto (para não se perder)
 

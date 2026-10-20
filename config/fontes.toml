@@ -1,0 +1,107 @@
+# Fontes, limites e orçamento do Garimpo v2.
+# Desligar uma fonte: enabled = false. Nada aqui é segredo — chaves ficam em env/secrets.
+
+# ---------- Fontes de descoberta ----------
+
+[hackernews]
+enabled = true
+min_points = 10
+hours = 26
+launch_hn = true            # também lê "Launch HN" (empresas do YC se apresentando)
+
+[producthunt]
+enabled = true              # precisa de PH_TOKEN
+hours = 26
+limit = 30
+
+[yc]
+enabled = true
+recent_batches = 2          # lotes mais novos entram como descoberta
+proven = true               # empresas antigas que cresceram entram como prova de tração
+proven_min_team = 25
+proven_min_age_years = 2
+proven_per_run = 15
+proven_industries = ["B2B", "Fintech", "Consumer", "Healthcare", "Education", "Real Estate and Construction", "Industrials"]
+
+[trustmrr]
+enabled = true              # receita verificada; sem API oficial, leitura leve de páginas públicas
+min_mrr_usd = 1000
+listing_urls = ["https://trustmrr.com/"]
+per_run = 20
+
+[appstore]
+enabled = true              # gap entre o top faturamento dos EUA e do Brasil (RSS público da Apple)
+genre = 6000                # 6000 = Business
+limit = 100
+
+[coleta]
+max_new_per_run = 150
+
+# ---------- Sondagem e sinais de tração ----------
+
+[sondagem]
+max_sites_per_run = 60
+timeout_s = 10
+
+[sinais]
+min_prior_for_signals = 4.5      # só busca vagas/Tranco/Form D para quem passou disso
+max_companies_per_run = 40
+user_agent = "garimpo-pessoal/2.0 (projeto de estudo)"
+sec_user_agent = "garimpo-pessoal/2.0 garimpo@example.com"   # a SEC exige um contato no User-Agent
+
+# ---------- LLM ----------
+
+[extracao]
+max_per_run = 60
+prompt_version = "extract_v2"
+
+[orcamento]
+max_usd_per_run = 0.30           # estourou, as etapas de LLM param e o resto segue
+max_usd_legacy_reprocess = 1.50  # teto do reprocessamento único dos produtos da v1
+
+# ---------- Fila, escavação e kit ----------
+
+[fila]
+min_prior = 6.0
+max_digs_per_run = 2
+expire_days = 90
+promoted_bonus = 1.5
+feedback_bonus = 0.5
+
+[escavacao]
+cost_ceiling_usd = 0.25          # teto por dossiê
+reviews_per_star = 70
+pause_s = 1.5
+serper_results = 8
+latam_countries = ["mx", "co", "ar"]
+
+[kit]
+min_posterior = 8.0
+weekly_best = true               # o melhor dossiê da semana ganha kit mesmo abaixo de 8
+weekly_best_min = 5.0
+
+# ---------- Acompanhamento ----------
+
+[revisitas]
+stages_days = [30, 90, 180]
+max_per_run = 40
+min_prior_to_watch = 5.0
+promote_delta = 1.0              # tração subiu ao menos isso → promovida
+
+[tendencias]
+window_days = 28
+recent_days = 7
+similarity = 0.62
+min_cluster = 3
+max_labels = 6
+embedding_dims = 256
+
+# ---------- Entrega e manutenção ----------
+
+[entrega]
+top_n = 6
+weekly_day = 6                   # 0 = segunda ... 6 = domingo (fuso de Brasília)
+github_repo = ""                 # vazio = usa GITHUB_REPOSITORY (preenchido pelo Actions)
+
+[manutencao]
+prune_payload_days = 90

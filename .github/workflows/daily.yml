@@ -2,15 +2,33 @@ name: Garimpo diario
 
 on:
   schedule:
-    - cron: "0 10 * * *"   # 10:00 UTC = 7:00 em Brasília
-  workflow_dispatch: {}      # permite rodar manualmente na aba Actions
+    # 08:37 UTC = 05:37 em Brasília. Fora da hora cheia (o GitHub atrasa os crons
+    # das :00) e com folga para o e-mail chegar antes das 7h mesmo com atraso.
+    - cron: "37 8 * * *"
+  workflow_dispatch:
+    inputs:
+      comando:
+        description: "O que rodar"
+        type: choice
+        options:
+          - rodar
+          - rodar --semanal
+          - extrair --legado
+          - status
+        default: rodar
 
 permissions:
-  contents: write            # para commitar o banco de volta
+  contents: write   # commitar o banco no branch data
+  issues: write     # dossiês viram Issues; feedback chega por Issues
+
+concurrency:
+  group: garimpo
+  cancel-in-progress: false
 
 jobs:
   garimpo:
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +38,28 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Rodar pipeline
+      - name: Baixar o banco do branch data
+        id: baixar
+        run: |
+          # 0 = branch existe; 2 = não existe (primeira execução da v2); outro = erro de rede.
+          # Erro de rede para o job: rodar com o banco velho do main e salvar por cima
+          # do branch data apagaria o histórico.
+          set +e
+          git ls-remote --exit-code --heads origin data > /dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            git fetch --depth=1 origin data
+            git show FETCH_HEAD:garimpo.db > data/garimpo.db
+            echo "banco baixado do branch data"
+          elif [ "$code" -eq 2 ]; then
+            echo "branch data ainda não existe — usando data/garimpo.db do main (primeira execução da v2)"
+          else
+            echo "não consegui consultar o branch data (código $code)"
+            exit 1
+          fi
+
+      - name: Rodar o Garimpo
         env:
           PH_TOKEN: ${{ secrets.PH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -31,13 +70,31 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
-        run: python -m app.main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m app ${{ github.event.inputs.comando || 'rodar' }}
 
-      - name: Commitar banco atualizado
+      - name: Salvar o banco no branch data
+        # always(): salva mesmo se o pipeline cair no meio; mas nunca se o download
+        # do banco falhou (senão o banco velho do main sobrescreveria o histórico)
+        if: always() && steps.baixar.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "garimpo-bot"
-          git config user.email "bot@garimpo"
-          git add data/garimpo.db
-          git diff --cached --quiet || git commit -m "garimpo: atualiza banco $(date +%F)"
-          git pull --rebase origin main   # remoto pode ter andado durante o run
-          git push
+          [ -f data/garimpo.db ] || exit 0
+          tmpdb="$(mktemp)"
+          cp data/garimpo.db "$tmpdb"
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+          git init -q
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 origin data 2>/dev/null; then
+            git checkout -q -b data FETCH_HEAD
+          else
+            git checkout -q --orphan data
+          fi
+          cp "$tmpdb" garimpo.db
+          git add garimpo.db
+          git -c user.name="garimpo-bot" -c user.email="bot@garimpo" \
+            commit -q -m "garimpo: banco $(date +%F)" || { echo "banco sem mudanças"; exit 0; }
+          git push -q origin data
+          echo "banco salvo no branch data"

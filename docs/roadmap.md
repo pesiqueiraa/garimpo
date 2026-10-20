@@ -83,6 +83,41 @@ Ao fim da v1.2: **zero desenvolvimento por 30 dias.** Só uso.
 
 ---
 
+## 🔧 v2 — Refatoração completa (outubro/2026) — FASE ATIVA
+
+**Decisão do dono (20/10/2026):** em vez de uma v1.3 de calibração, refazer o Garimpo inteiro com a arquitetura de `docs/v2-arquitetura.md`. Registrado aqui porque contraria a regra "fase nova só com a anterior em uso real" — o congelamento terminou sem diário preenchido e com o workflow desligado em 22/08.
+
+**O que os dados da v1 mostraram (12/07 a 22/08):**
+- 405 de 519 produtos com score exatamente 6 ou 7 → a nota do LLM não diferenciava nada.
+- 71 dossiês e **zero kits** (kit exigia nota ≥ 8, que nunca saiu) → a meta "1 kit na rua" era impossível.
+- Product Hunt trouxe 1 produto em 6 semanas → fonte quebrada em silêncio.
+- Dossiês de DeepSeek, LLM em FPGA, visualizador do HuggingFace → nada filtrava o que não é SaaS tropicalizável.
+
+**Entregas da v2:**
+
+| Item | Status |
+|---|---|
+| Empresa como unidade (`companies` + `events` + `observations`) e migração da v1 | ✅ |
+| LLM só extrai fatos (JSON Schema); nota em código com subnotas, pesos e descarte | ✅ |
+| Fontes com prova de tração: YC antigas que cresceram, TrustMRR, gap App Store EUA × BR, Launch HN | ✅ |
+| Sinais de tração: site/preços, idade do domínio, equipe YC, vagas, Tranco, Form D | ✅ |
+| Fila com prioridade, orçamento e expiração; revisitas D+30/90/180 com promoção | ✅ |
+| Escavação: App Store, Reclame Aqui, G2, LatAm, mapa de concorrentes BR, TAM por CNAE | ✅ |
+| Kit também para o melhor dossiê da semana | ✅ |
+| Dossiês como Issues; feedback por e-mail e labels; afinidade por embeddings | ✅ |
+| E-mail semanal: tendências, tração, kit da semana, fila, saúde | ✅ |
+| Operação: branch `data`, cron fora da hora cheia, teto por execução, saúde das fontes, golden set | ✅ |
+
+**Critérios de pronto (uso real, não código):**
+- [ ] Workflow religado e 7 execuções seguidas sem fonte zerada no rodapé
+- [ ] `extrair --legado` rodado uma vez e score com distribuição espalhada (não 6-7)
+- [ ] Golden set com ≥ 40 rótulos e Spearman da v2 maior que o da v1 (`python -m app avaliar`)
+- [ ] **1 kit executado na rua: landing no ar + 5 entrevistas** (a meta que a v1 não permitiu)
+
+*Nada das fases abaixo começa antes desses critérios.*
+
+---
+
 ## 📡 Fase 2 — Mais sinal (v2.0)
 
 Objetivo: capturar oportunidades mais cedo, antes de virarem produto.
@@ -150,7 +185,8 @@ Somente se, após meses de uso, o Garimpo se provar valioso para você:
 |---|---|---|
 | 0 ✅ | Radar diário por e-mail | Feito — falta ativar |
 | 1 🎯 | Dossiê com dores reais + kit de validação | Próximos 2-4 fins de semana |
-| 🧊 | 30 dias de uso, 1 validação na rua | Obrigatório antes de seguir |
+| 🧊 | 30 dias de uso, 1 validação na rua | Encerrado sem diário (22/08) |
+| v2 🔧 | Refatoração: empresa, nota em código, tração, revisitas, Issues | Ativa (outubro/2026) |
 | 2 | Mais fontes de sinal | Conforme diário de uso |
 | 3 | Dimensão de mercado nos dossiês | Conforme diário de uso |
 | 4 | Feedback loop e memória | Conforme diário de uso |

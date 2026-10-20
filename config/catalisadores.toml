@@ -1,0 +1,48 @@
+# Catalisadores brasileiros: mudanças que criam um "por que agora" para tropicalizar.
+# O score cruza cada catalisador com os trilhos locais (rails) e as palavras-chave
+# da extração. Atualize datas e descrições quando a regra mudar — isto é curadoria manual.
+
+[[catalisador]]
+id = "pix_automatico"
+nome = "Pix Automático"
+desde = "2025-06-16"
+rails = ["payments"]
+keywords = ["assinatura", "recorrente", "mensalidade", "subscription", "recurring", "débito automático", "direct debit", "billing"]
+nota = "Cobrança recorrente via Pix com um único consentimento do pagador."
+fonte = "https://edicao.correiobraziliense.com.br/correiobraziliense/2025/06/17/18275c/pdf/A07-ECO-1706-DIG.pdf"
+
+[[catalisador]]
+id = "cobranca_hibrida"
+nome = "Cobrança híbrida (boleto + Pix)"
+desde = "2026-09-18"
+rails = ["payments", "invoicing_tax"]
+keywords = ["boleto", "cobrança", "invoice", "invoicing", "accounts receivable", "contas a receber", "dunning", "collections"]
+nota = "Boleto e QR Code Pix no mesmo documento, regulamentado pelo Banco Central."
+fonte = "https://portaldeprefeitura.com.br/brasil/pix-tera-novas-regras-para-combater-fraudes-e-ampliar-seguranca/632398/"
+
+[[catalisador]]
+id = "nfse_nacional"
+nome = "NFS-e padrão nacional"
+desde = "2026-01-01"
+rails = ["invoicing_tax"]
+keywords = ["nota fiscal", "nfs-e", "invoice", "invoicing", "faturamento", "billing", "accounting", "contabilidade"]
+nota = "Municípios obrigados a aceitar o padrão nacional ou compartilhar as notas no ambiente nacional; migração gradual."
+fonte = "https://www.contabeis.com.br/noticias/71679/nfs-e-nacional-sera-obrigatoria-para-municipios-a-partir-de-2026/"
+
+[[catalisador]]
+id = "reforma_tributaria"
+nome = "Reforma tributária do consumo (LC 214/2025)"
+desde = "2026-01-01"
+rails = ["invoicing_tax", "local_regulation"]
+keywords = ["tax", "imposto", "tributo", "vat", "sales tax", "compliance", "fiscal", "accounting", "contabilidade"]
+nota = "Transição para CBS/IBS a partir de 2026 muda cálculo e obrigações acessórias."
+fonte = "https://www.contabeis.com.br/noticias/71679/nfs-e-nacional-sera-obrigatoria-para-municipios-a-partir-de-2026/"
+
+[[catalisador]]
+id = "pix_garantia"
+nome = "Pix em Garantia (previsto)"
+desde = "2026-12-31"
+rails = ["banking_open_finance", "payments"]
+keywords = ["lending", "credit", "loan", "receivables", "recebíveis", "empréstimo", "financing", "working capital"]
+nota = "Recebíveis futuros via Pix como garantia de crédito. Previsto pelo BC — confirmar data antes de apostar."
+fonte = "https://olhardigital.com.br/2026/02/10/pro/6-novidades-previstas-para-o-pix-em-2026-e-2027/"

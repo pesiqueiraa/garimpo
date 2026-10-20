@@ -27,44 +27,53 @@ ITEMS = [
 ]
 
 
+KIT = {"landing": {"headline": "H", "subheadline": "S", "benefits": ["a", "b", "c"], "cta": "C"},
+       "mom_test": ["p1", "p2", "p3", "p4", "p5"], "whatsapp": "oi, pessoal",
+       "where_to_find": ["Associação Brasileira de Odontologia", "grupos de dentistas no Facebook",
+                         "categoria 'clínica odontológica' no Google Maps"]}
+
+
+def fake_llm(prompt, **kw):
+    """LLM falso que responde conforme o prompt (extração, escavação, kit, tendência)."""
+    if "extrai FATOS" in prompt:
+        facts = copy.deepcopy(FACTS)
+        if "FPGA" in prompt:
+            facts["kill_flags"] = ["research_demo"]
+            facts["business_type"] = "ai_model_or_infra"
+        return facts, 100, 50
+    if "kit de validação" in prompt:
+        return copy.deepcopy(KIT), 80, 40
+    if "ângulo de ataque" in prompt:
+        return {"attack_angle": "Atacar a cobrança manual com Pix Automático e lembretes no WhatsApp."}, 90, 60
+    if "concorrentes" in prompt:
+        return {"competitors": [{"name": "Rival", "search_term": "agenda clinica"}]}, 30, 10
+    if "TEMA comum" in prompt:
+        return {"label": "agendas para clínicas"}, 20, 5
+    return {}, 1, 1
+
+
 def _edges(monkeypatch, items=ITEMS, llm_on=True):
-    """Mocka só as bordas: coleta, rede dos sinais, LLM e SMTP."""
+    """Mocka só as bordas: coleta, rede dos sinais e das lojas, LLM e SMTP."""
     from app import deliver, signals, sources
+    from app.dig import appstore, playstore
     monkeypatch.setattr(sources, "collect_all",
                         lambda cfg: (copy.deepcopy(items), {"hackernews": 2, "producthunt": 1}))
-    monkeypatch.setattr(signals.site, "probe", lambda url, cfg: None)
+    monkeypatch.setattr(signals.site, "probe", lambda url, cfg=None: None)
     monkeypatch.setattr(signals, "run", lambda conn, cfg, company_ids=None: 0)
+    monkeypatch.setattr(playstore, "confirm_on_play_store", lambda term, pause_s=0: None)
+    monkeypatch.setattr(appstore, "confirm_on_app_store", lambda term, pause_s=0: None)
     sent = []
     monkeypatch.setattr(deliver.mail, "send", lambda html, subject: sent.append(subject) or True)
     if llm_on:
         monkeypatch.setenv("OPENAI_API_KEY", "k")
-
-        def fake_ask(prompt, **kw):
-            facts = copy.deepcopy(FACTS)
-            if "FPGA" in prompt:
-                facts["kill_flags"] = ["research_demo"]
-                facts["business_type"] = "ai_model_or_infra"
-            return facts, 100, 50
-        monkeypatch.setattr(llm, "ask_json", fake_ask)
+        monkeypatch.setattr(llm, "ask_json", fake_llm)
         monkeypatch.setattr(llm, "embed", lambda texts, dims=256: [[1.0] + [0.0] * (dims - 1)
                                                                    for _ in texts])
     return sent
 
 
 def test_rodar_completo_sem_rede(prod_db, monkeypatch):
-    from app import dig
     sent = _edges(monkeypatch)
-    dug = []
-
-    def fake_dig_run(conn, cfg):
-        for c in db.queued_companies(conn, 2):
-            did = db.save_dossier(conn, c["id"], {"attack_angle": "ângulo", "br_verdict": "sem_concorrente",
-                                                  "score_posterior": 8.1})
-            db.mark_dug(conn, c["id"])
-            dug.append(did)
-        return len(dug)
-    monkeypatch.setattr(dig, "run", fake_dig_run)
-
     assert cli.main(["rodar"]) == 0
     conn = db.connect(prod_db)
     agendai = db.find_company_by_key(conn, "agendai.com")
@@ -72,14 +81,21 @@ def test_rodar_completo_sem_rede(prod_db, monkeypatch):
     assert db.company_sources(conn, agendai["id"]) == ["hackernews", "producthunt"]
     assert db.get_company(conn, fpga["id"])["status"] == "discarded"
     assert db.latest_score(conn, agendai["id"])["total"] >= 6
-    assert dug and db.get_company(conn, agendai["id"])["status"] == "dug"
+
+    # escavação de verdade (lojas e busca mockadas): dossiê com score posterior
+    d = db.last_dossier_for_company(conn, agendai["id"])
+    assert d is not None and d["dossier"]["score_posterior"] is not None
+    assert "Pix Automático" in d["dossier"]["attack_angle"]
+    assert db.get_company(conn, agendai["id"])["status"] == "dug"
+    assert db.last_dossier_for_company(conn, fpga["id"]) is None
 
     run = db.recent_runs(conn, 1)[0]
     assert run["source_counts"] == {"hackernews": 2, "producthunt": 1}
     assert run["errors"] == []
-    assert run["tokens_in"] > 0
+    assert d["dossier"]["tokens_in"] > 0  # custo do dossiê vem dos tokens devolvidos pelo LLM
     assert sent and sent[0].startswith("⛏️")
-    assert list(Path(prod_db).parent.glob("relatorio-*.html"))
+    html = next(Path(prod_db).parent.glob("relatorio-*.html")).read_text()
+    assert "Agendaí" in html and "FPGA" not in html
 
 
 def test_rodar_sem_nenhuma_chave_ainda_gera_email(prod_db, monkeypatch):

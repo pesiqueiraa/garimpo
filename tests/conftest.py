@@ -4,6 +4,7 @@ Testes mockam só as bordas (requests, llm.ask_json, llm.embed, google_play_scra
 nunca a lógica.
 """
 import copy
+import socket
 
 import pytest
 import requests
@@ -44,6 +45,10 @@ def _isolamento(monkeypatch):
     monkeypatch.setattr(requests, "get", _sem_rede)
     monkeypatch.setattr(requests, "post", _sem_rede)
     monkeypatch.setattr(requests, "head", _sem_rede)
+    monkeypatch.setattr(requests, "patch", _sem_rede)
+    # bibliotecas que não usam requests (google-play-scraper usa urllib) param no socket
+    monkeypatch.setattr(socket.socket, "connect", _sem_rede)
+    monkeypatch.setattr(socket, "create_connection", _sem_rede)
 
 
 FACTS = {

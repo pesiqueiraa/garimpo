@@ -1,0 +1,15 @@
+Você é um analista de mercado de SaaS e vai sugerir aplicativos concorrentes para pesquisa de lojas.
+Para o produto abaixo, liste de 3 a 5 aplicativos concorrentes ou similares que provavelmente existem
+na Google Play Store ou na App Store. Inclua players globais E brasileiros, se conhecer, e o próprio
+produto se ele tiver app. Não invente: se não conhecer um app pelo nome, sugira um termo de busca
+genérico do nicho em vez de um nome inventado.
+
+Responda SOMENTE JSON:
+{{"competitors": [{{"name": "nome do app", "search_term": "termo curto de busca (2 a 4 palavras)"}}]}}
+
+Produto: {name}
+Descrição: {tagline}
+Resumo: {summary}
+Nicho: {niche}
+Dor que resolve: {pain}
+Cliente no Brasil: {segment}

@@ -1,0 +1,22 @@
+Você é um estrategista de SaaS e vai escrever o ângulo de ataque para tropicalizar um produto validado lá fora.
+O leitor é um empreendedor brasileiro decidindo se vale adaptar o produto ao Brasil (Pix, WhatsApp,
+nota fiscal, Simples Nacional, regulação local).
+
+Produto original: {name} — {tagline}
+Nicho: {niche} | Dor: {pain}
+Cliente no Brasil: {segment}
+Apps confirmados nas lojas: {players_block}
+Mapa de dores (avaliações 1-3★ dos concorrentes): {clusters_block}
+Concorrência no Brasil (busca real): {market_block}
+Reclamações públicas (Reclame Aqui / G2): {complaints_block}
+América Latina: {latam_block}
+Catalisadores brasileiros ("por que agora"): {catalysts_block}
+Tamanho de mercado: {tam_block}
+
+Escreva o ângulo de ataque: quais dores negligenciadas atacar, como adaptar ao Brasil e por que agora.
+Um parágrafo denso (máx. 120 palavras) seguido de 3 bullets de diferenciais concretos, separados por \n.
+Regras: use só os fatos acima. Número que não estiver acima não entra; o que for inferência sua
+(tamanho de mercado, preço, adoção) leva o rótulo "(estimativa)". Se a busca real não foi feita,
+diga que a concorrência no Brasil não foi verificada.
+
+Responda SOMENTE JSON: {{"attack_angle": "texto"}}

@@ -95,6 +95,7 @@ similarity = 0.62
 min_cluster = 3
 max_labels = 6
 embedding_dims = 256
+max_embed_per_run = 1000
 
 # ---------- Entrega e manutenção ----------
 

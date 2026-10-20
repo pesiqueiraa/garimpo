@@ -84,7 +84,7 @@ def companies_without_site_page(conn: sqlite3.Connection, limit: int) -> list[sq
     """Empresas com URL própria e sem leitura do site, mais novas primeiro."""
     return conn.execute(
         """SELECT c.* FROM companies c LEFT JOIN site_pages p ON p.company_id = c.id
-           WHERE p.company_id IS NULL AND c.url IS NOT NULL
+           WHERE p.company_id IS NULL AND c.url IS NOT NULL AND c.url <> ''
              AND c.status NOT IN ('discarded', 'expired')
            ORDER BY c.first_seen DESC LIMIT ?""",
         (limit,)).fetchall()

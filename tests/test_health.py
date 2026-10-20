@@ -46,3 +46,10 @@ def test_entrada_malformada_nao_quebra():
     previous = [{"source_counts": None}, {}, {"source_counts": {"hn": "abc"}}, {"source_counts": {"hn": 4}}]
     assert health.alerts(previous, {"hn": None}, [None, ""]) == [
         "⚠️ hn não trouxe nada hoje (costuma trazer ~4)"]
+
+
+def test_todas_as_fontes_zeradas_alerta_mesmo_sem_historico():
+    from app import health
+    out = health.alerts([], {"hackernews": 0, "yc": 0}, [])
+    assert out and "nenhuma fonte" in out[0]
+    assert not any("nenhuma fonte" in a for a in health.alerts([], {"hackernews": 3, "yc": 0}, []))

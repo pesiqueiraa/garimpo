@@ -6,13 +6,15 @@ git e não pode ser recriado do zero — toda mudança de schema é uma migraç�
 """
 import importlib
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = ROOT / "data" / "garimpo.db"
+# GARIMPO_DB permite testar com uma cópia do banco sem tocar no data/garimpo.db
+DB_PATH = Path(os.environ.get("GARIMPO_DB") or ROOT / "data" / "garimpo.db")
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 

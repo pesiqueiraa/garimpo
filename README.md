@@ -49,6 +49,11 @@ python -m app baixar-banco             # traz o banco de produção do branch da
 python -m app --help                   # todos os comandos
 ```
 
+Para testar com uma cópia do banco sem tocar em `data/garimpo.db`:
+`GARIMPO_DB=/caminho/copia.db python -m app rodar --sem-email`. Localmente, não
+defina `GITHUB_REPOSITORY` com um token de escrita no ambiente, ou os dossiês do
+teste viram Issues de verdade.
+
 `python -m app.main` e `python -m app.main --investigar X` continuam
 funcionando por compatibilidade com a v1.
 

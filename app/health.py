@@ -19,6 +19,13 @@ def _count(run: dict, source: str) -> int | None:
         return None
 
 
+def _as_int(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _fmt(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
 
@@ -27,6 +34,10 @@ def alerts(recent_runs: list[dict], current_counts: dict[str, int], errors: list
     """Avisos para o rodapé do e-mail. `recent_runs` = execuções anteriores, mais recentes primeiro."""
     out: list[str] = []
     previous = list(recent_runs or [])[:HISTORY]
+    counts = current_counts or {}
+    if len(counts) >= 2 and all(_as_int(v) == 0 for v in counts.values()):
+        # vale até na primeira execução, sem histórico: rede, tokens ou APIs fora
+        out.append("🛑 nenhuma fonte trouxe nada nesta execução — verifique rede, tokens e APIs")
     for source, value in (current_counts or {}).items():
         try:
             now = int(value or 0)

@@ -1,0 +1,10 @@
+Você dá nome a um grupo de produtos estrangeiros parecidos que apareceram nas últimas semanas.
+Leia os exemplos e escreva o TEMA comum em português do Brasil, em 2 a 5 palavras, como um título curto
+(ex.: "agendamento para clínicas", "cobrança recorrente para PMEs", "IA para atendimento no WhatsApp").
+Regras: nada de nome de empresa, nada de adjetivo vazio ("inovador", "revolucionário"), sem ponto final.
+Se os exemplos forem muito diferentes entre si, use o tema mais frequente.
+
+Responda SOMENTE o objeto JSON: {{"label": "tema curto em português"}}
+
+Exemplos do grupo ({size} empresas, {size_recent} na última semana):
+{examples}

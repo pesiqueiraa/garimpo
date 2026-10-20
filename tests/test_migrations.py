@@ -47,7 +47,7 @@ def test_migra_banco_v1_para_v2(tmp_path):
     path = tmp_path / "v1.db"
     _v1_db(path)
     conn = db.connect(path)
-    assert db.schema_version(conn) == 3
+    assert db.schema_version(conn) == 4
 
     # Acme e Acme App compartilham o domínio registrável → mesma empresa
     assert conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 3
@@ -84,7 +84,7 @@ def test_migracao_e_idempotente(tmp_path):
 
 
 def test_banco_novo_nasce_na_v2(conn):
-    assert db.schema_version(conn) == 3
+    assert db.schema_version(conn) == 4
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"companies", "events", "observations", "dossiers", "br_competitors", "runs",
             "legacy_products"} <= tables

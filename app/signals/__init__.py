@@ -12,7 +12,7 @@ from datetime import date
 
 from app import db
 from app.config import get
-from app.resolve import clean_url, site_key
+from app.resolve import clean_url, normalize_name, site_key
 from app.signals import formd, jobs, site, tranco, wayback
 from app.sources import yc
 
@@ -32,12 +32,30 @@ NOT_COMPANY_DOMAINS = {
 }
 
 
+def _related(company, domain: str) -> bool:
+    """O destino do redirect parece ser desta empresa? Evita fundir duas empresas sem
+    relação que redirecionam para o mesmo terceiro (SSO, hospedagem, comprador)."""
+    if str(company["site_key"]).startswith("producthunt.com/r/"):
+        return True  # link do Product Hunt sempre aponta para o site do produto
+    label = normalize_name(domain.split(".")[0])
+    candidates = [normalize_name(company["name"]), company["name_key"] or "",
+                  normalize_name((company["domain"] or "").split(".")[0])]
+    for c in candidates:
+        if len(c) >= 3 and len(label) >= 3 and (c in label or label in c):
+            return True
+    return False
+
+
 def _new_site(company, final_url: str | None) -> tuple[str, str | None] | None:
-    """(site_key, domínio) do destino do redirect, se for um site próprio diferente do atual."""
+    """(site_key, domínio) do destino do redirect, se for um site próprio diferente do atual
+    e com cara de ser da mesma empresa."""
     if not final_url:
         return None
     key, domain = site_key(final_url, company["name"])
     if not domain or key == company["site_key"] or domain in NOT_COMPANY_DOMAINS:
+        return None
+    if not _related(company, domain):
+        print(f"[sondagem] '{company['name']}' redireciona para {domain}, sem relação aparente — ignorado")
         return None
     return key, domain
 

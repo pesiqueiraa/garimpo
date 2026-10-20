@@ -42,7 +42,7 @@ def queued_companies(conn: sqlite3.Connection, limit: int | None = None) -> list
 def expire_queue(conn: sqlite3.Connection, older_than_iso: str) -> int:
     cur = conn.execute(
         """UPDATE companies SET status='expired', status_reason='90 dias na fila sem tração nova',
-           status_changed_at=?, queue_priority=NULL
+           status_changed_at=?, queue_priority=NULL, queued_at=NULL, promoted_at=NULL
            WHERE status='queued' AND queued_at < ?""",
         (now_iso(), older_than_iso))
     return cur.rowcount
@@ -61,7 +61,7 @@ def record_dig_failure(conn: sqlite3.Connection, company_id: int) -> None:
 def mark_dug(conn: sqlite3.Connection, company_id: int) -> None:
     conn.execute(
         """UPDATE companies SET status='dug', queue_priority=NULL, queued_at=NULL,
-           status_changed_at=?, status_reason=NULL WHERE id=?""",
+           promoted_at=NULL, status_changed_at=?, status_reason=NULL WHERE id=?""",
         (now_iso(), company_id))
 
 
@@ -183,9 +183,16 @@ def set_dossier_issue(conn: sqlite3.Connection, dossier_id: int, issue_number: i
 def set_dossier_kit(conn: sqlite3.Connection, dossier_id: int, kit: dict, reason: str,
                     extra_cost: float = 0.0, extra_in: int = 0, extra_out: int = 0) -> None:
     conn.execute(
-        """UPDATE dossiers SET kit=?, kit_reason=?, cost_usd=COALESCE(cost_usd,0)+?,
+        """UPDATE dossiers SET kit=?, kit_reason=?, kit_at=?, cost_usd=COALESCE(cost_usd,0)+?,
            tokens_in=COALESCE(tokens_in,0)+?, tokens_out=COALESCE(tokens_out,0)+? WHERE id=?""",
-        (to_json(kit), reason, extra_cost, extra_in, extra_out, dossier_id))
+        (to_json(kit), reason, now_iso(), extra_cost, extra_in, extra_out, dossier_id))
+
+
+def weekly_kit_since(conn: sqlite3.Connection, iso: str) -> sqlite3.Row | None:
+    """Kit da semana gerado desde `iso` (trava contra um segundo kit na mesma semana)."""
+    return conn.execute(
+        "SELECT * FROM dossiers WHERE kit_reason='weekly_best' AND kit_at >= ? ORDER BY kit_at DESC",
+        (iso,)).fetchone()
 
 
 def best_dossier_without_kit(conn: sqlite3.Connection, since_iso: str,

@@ -288,7 +288,8 @@ def weekly_kit(conn, cfg: dict) -> int | None:
         print("[kit] OPENAI_API_KEY ausente, sem kit da semana")
         return None
     since = db.days_ago_iso(7)
-    if any(d["dossier"].get("kit_reason") == "weekly_best" for d in db.dossiers_since(conn, since)):
+    # 6 dias: atraso do cron no domingo seguinte não pode contar o kit da semana passada
+    if db.weekly_kit_since(conn, db.days_ago_iso(6)) is not None:
         print("[kit] o kit da semana já saiu, pulando")
         return None
     row = db.best_dossier_without_kit(conn, since,

@@ -117,7 +117,8 @@ def build(conn, cfg: dict, run_info: dict | None = None, now: datetime | None = 
     """Monta o e-mail diário. Devolve (assunto, html)."""
     run_info = run_info or {}
     now = now or datetime.now(timezone.utc)
-    since = (now - timedelta(days=WINDOW_DAYS)).isoformat(timespec="seconds")
+    since = (run_info or {}).get("since") or \
+        (now - timedelta(days=WINDOW_DAYS)).isoformat(timespec="seconds")
 
     dossiers = db.dossiers_since(conn, since)
     # quem já aparece como dossiê ou promovida não repete nos destaques

@@ -63,7 +63,10 @@ def run(conn, cfg: dict) -> dict:
         print("[revisita] nenhuma empresa vencida hoje")
         return {"revisited": 0, "promoted": 0}
 
-    before = {c["id"]: db.latest_score(conn, c["id"], "prior") for c, _ in due}
+    # base = tração na revisita anterior; na primeira, a do primeiro score. Não dá para usar
+    # o score de agora: os sinais diários já atualizam a tração antes da revisita chegar.
+    baseline = {c["id"]: (c["revisit_traction"] if c["revisit_traction"] is not None
+                          else db.first_traction(conn, c["id"])) for c, _ in due}
     for company, _ in due:
         _refresh_site(conn, company, cfg)
     ids = [c["id"] for c, _ in due]
@@ -75,12 +78,12 @@ def run(conn, cfg: dict) -> dict:
 
     promoted = 0
     for company, stage in due:
-        old, new = before.get(company["id"]), db.latest_score(conn, company["id"], "prior")
-        db.mark_revisited(conn, company["id"], stage)
-        if not old or not new or new.get("kill_reason"):
+        new = db.latest_score(conn, company["id"], "prior")
+        new_t = ((new or {}).get("subscores") or {}).get("traction")
+        db.mark_revisited(conn, company["id"], stage, new_t)
+        if not new or new.get("kill_reason") or new_t is None:
             continue
-        old_t = (old.get("subscores") or {}).get("traction") or 1
-        new_t = (new.get("subscores") or {}).get("traction") or 1
+        old_t = baseline.get(company["id"]) or 1
         if new_t - old_t >= delta_min and company["status"] not in KEEP_STATUS:
             days = stages[stage - 1]
             db.set_company_status(conn, company["id"], "promoted",

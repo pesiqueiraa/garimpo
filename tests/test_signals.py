@@ -299,6 +299,7 @@ FORMD = {"took": 12, "hits": {"total": {"value": 3}, "hits": [
 
 
 def test_formd_conta_so_o_nome_certo(monkeypatch, cfg, conn):
+    monkeypatch.setenv("MAIL_TO", "dono@exemplo.com.br")
     company = db.get_company(conn, make_company(conn, "Acme Invoices", url="https://acmeinvoices.com"))
     fake = router({"efts.sec.gov/LATEST/search-index": FakeResponse(FORMD)})
     monkeypatch.setattr(requests, "get", fake)
@@ -307,7 +308,7 @@ def test_formd_conta_so_o_nome_certo(monkeypatch, cfg, conn):
         "formd_filings": 2, "formd_last": "2024-02-10"}
     assert {o["source"] for o in obs} == {"sec_formd"}
     assert fake.calls[0]["params"] == {"q": '"Acme Invoices"', "forms": "D"}
-    assert fake.calls[0]["headers"]["User-Agent"] == cfg["fontes"]["sinais"]["sec_user_agent"]
+    assert fake.calls[0]["headers"]["User-Agent"] == "garimpo-pessoal/2.0 dono@exemplo.com.br"
 
 
 def test_formd_fundo_homonimo_nao_conta():
@@ -363,6 +364,7 @@ def _traction_routes():
 
 
 def test_run_grava_observacoes(monkeypatch, cfg, conn):
+    monkeypatch.setenv("MAIL_TO", "dono@exemplo.com.br")
     acme = make_company(conn, "Acme", url="https://acme.com", prior=6.0)
     bolt = make_company(conn, "Bolt Ledger", url="https://boltledger.com", prior=5.0)
     low = make_company(conn, "Baixa", url="https://baixa.com", prior=3.0)
@@ -465,3 +467,18 @@ def test_probe_new_nao_troca_para_pagina_de_login(monkeypatch, cfg, conn):
         "web.archive.org": FakeResponse([])}))
     signals.probe_new(conn, cfg)
     assert db.get_company(conn, cid)["site_key"] == "acme.com"
+
+
+def test_formd_sem_contato_nao_consulta(monkeypatch, cfg, conn):
+    from app.signals import formd
+    monkeypatch.delenv("MAIL_TO", raising=False)
+    monkeypatch.delenv("SEC_CONTACT", raising=False)
+    cid = make_company(conn, "Acmesoft")
+    company = db.get_company(conn, cid)
+    assert formd.lookup(company, cfg) == []  # sem rede: requests.get bloqueado nem é chamado
+
+
+def test_formd_usa_contato_do_ambiente(monkeypatch, cfg):
+    from app.signals import formd
+    monkeypatch.setenv("SEC_CONTACT", "dono@exemplo.com.br")
+    assert formd.sec_user_agent(cfg) == "garimpo-pessoal/2.0 dono@exemplo.com.br"

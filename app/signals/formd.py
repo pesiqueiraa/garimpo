@@ -4,8 +4,10 @@ Sinal FRACO: a busca é pelo nome, e nomes curtos ou comuns colidem com outras
 empresas (um "Acme" qualquer em Delaware). Por isso só contamos registros cujo
 nome declarado começa com o nome normalizado da empresa (fundos e SPVs com o
 mesmo nome ficam de fora) e pulamos nomes com menos de 4 letras ou genéricos. A SEC exige um contato no User-Agent
-(fontes.sinais.sec_user_agent) e limita a 10 requisições por segundo.
+(SEC_CONTACT ou MAIL_TO; sem contato, a consulta é pulada) e limita a 10 requisições por segundo.
 """
+import os
+
 import requests
 
 from app.config import get
@@ -13,7 +15,6 @@ from app.resolve import normalize_name
 
 URL = "https://efts.sec.gov/LATEST/search-index"
 TIMEOUT = 20
-DEFAULT_SEC_UA = "garimpo-pessoal/2.0 garimpo@example.com"
 GENERIC = {
     "app", "apps", "labs", "data", "cloud", "health", "capital", "group", "global", "digital",
     "solutions", "systems", "software", "tech", "technologies", "ventures", "partners", "holdings",
@@ -58,6 +59,24 @@ def parse(data: dict, name_key: str) -> tuple[int, str | None]:
     return count, last
 
 
+_warned = {"no_contact": False}
+
+
+def sec_user_agent(cfg: dict) -> str | None:
+    """User-Agent com contato de verdade, como a SEC exige. Sem contato, não consulta:
+    um e-mail de mentira tende a ser bloqueado e o sinal zeraria em silêncio."""
+    configured = (get(cfg, "fontes.sinais.sec_user_agent", "") or "").strip()
+    if configured and "example.com" not in configured:
+        return configured
+    contact = (os.environ.get("SEC_CONTACT") or os.environ.get("MAIL_TO") or "").strip()
+    if "@" in contact:
+        return f"garimpo-pessoal/2.0 {contact.split(',')[0].strip()}"
+    if not _warned["no_contact"]:
+        print("[sec_formd] sem contato para o User-Agent (SEC_CONTACT ou MAIL_TO), pulando Form D")
+        _warned["no_contact"] = True
+    return None
+
+
 def lookup(company, cfg: dict) -> list[dict]:
     try:
         name, name_key = company["name"], company["name_key"]
@@ -65,7 +84,9 @@ def lookup(company, cfg: dict) -> list[dict]:
         return []
     if not usable_name(name_key):
         return []
-    ua = get(cfg, "fontes.sinais.sec_user_agent", DEFAULT_SEC_UA)
+    ua = sec_user_agent(cfg)
+    if not ua:
+        return []
     try:
         r = requests.get(URL, params={"q": f'"{name}"', "forms": "D"},
                          headers={"User-Agent": ua, "Accept": "application/json"}, timeout=TIMEOUT)

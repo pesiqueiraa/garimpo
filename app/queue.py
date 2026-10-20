@@ -8,9 +8,9 @@ from app import db
 from app.config import get
 
 
-def priority(prior_total: float, status: str, owner_signal: str | None, cfg: dict) -> float:
+def priority(prior_total: float, promoted: bool, owner_signal: str | None, cfg: dict) -> float:
     value = float(prior_total or 0)
-    if status == "promoted":
+    if promoted:
         value += float(get(cfg, "fontes.fila.promoted_bonus", 1.5))
     if owner_signal in ("like", "watch", "interesting"):
         value += float(get(cfg, "fontes.fila.feedback_bonus", 0.5))
@@ -24,7 +24,7 @@ def refresh(conn, cfg: dict) -> dict:
     queued = 0
     eligible = set()
     for c in db.queue_candidates(conn, min_prior):
-        db.set_queued(conn, c["id"], priority(c["prior_total"], c["status"],
+        db.set_queued(conn, c["id"], priority(c["prior_total"], bool(c["promoted_at"]),
                                               db.latest_signal(conn, c["id"]), cfg))
         eligible.add(c["id"])
         queued += 1

@@ -16,7 +16,7 @@ Instruções e boas práticas para trabalhar neste projeto (lidas pelo Claude Co
 - **Contrato dos sinais:** `lookup(company, cfg) -> list[observação]` com métricas da tabela do `docs/v2-arquitetura.md`. Métrica nova entra primeiro nessa tabela.
 - **O LLM extrai fatos; a nota é calculada em código** (`score.py`, funções puras). Não peça nota ao LLM. Ajuste de pesos e limiares é em `config/pesos.toml` / `config/perfil.toml`, medido com `python -m app avaliar`.
 - **Falha graciosa é inegociável:** toda chamada externa (API, scraping, LLM, SMTP, GitHub) em try/except com log `[modulo] mensagem`. Uma fonte quebrada nunca derruba o pipeline e o e-mail sempre sai. A escavação aborta só o dossiê que estourou o teto; `llm.BudgetExceeded` para as etapas de LLM da execução.
-- **Toda credencial é opcional:** ausência de chave = etapa pulada com aviso claro, nunca crash (`OPENAI_API_KEY`, `SERPER_API_KEY`, `PH_TOKEN`, `GITHUB_TOKEN`, SMTP).
+- **Toda credencial é opcional:** ausência de chave = etapa pulada com aviso claro, nunca crash (`OPENAI_API_KEY`, `SERPER_API_KEY`, `PH_TOKEN`, `GITHUB_TOKEN`, `SEC_CONTACT`, SMTP).
 - **Dependências mínimas:** `requests` e `google-play-scraper` em runtime (config em TOML via `tomllib` da stdlib). Antes de adicionar uma lib, pergunte se 20 linhas de código puro resolvem.
 - **Simplicidade > abstração:** funções simples, nada de classes abstratas, factories ou camadas "para o futuro". A refatoração da v2 foi decisão explícita do dono (ver roadmap); refatoração grande nova continua precisando de motivo concreto.
 - Python 3.12 (versão do runner), type hints nos parâmetros e retornos públicos, docstrings curtas em português explicando o *porquê*, nomes de variáveis em inglês.
@@ -27,7 +27,7 @@ Instruções e boas práticas para trabalhar neste projeto (lidas pelo Claude Co
 - **TODO o SQL mora em `app/db/`** (pacote reexportado como `from app import db`). Nada de SQL em outros módulos.
 - **Mudança de schema = migração nova** em `app/migrations/NNN_nome.sql` ou `.py` (função `run(conn)`), aplicada em ordem e registrada em `PRAGMA user_version`. Nunca edite uma migração já aplicada em produção.
 - A empresa é a unidade (`companies.site_key`). Tudo que entra passa por `resolve.ingest()`. Nunca inserir empresa direto.
-- `observations` só recebe INSERT — é o histórico que permite acompanhar tração.
+- `observations` só recebe INSERT, e só quando o valor muda — é o histórico que permite acompanhar tração sem inchar o banco (ele vive no git).
 - As tabelas `legacy_*` são a v1 congelada: só leitura.
 - Reviews cruas não são persistidas — só o destilado (clusters com trechos curtos e anônimos).
 

@@ -51,7 +51,7 @@ min_prior_for_signals = 4.5      # só busca vagas/Tranco/Form D para quem passo
 max_companies_per_run = 40
 jobs_pause_s = 0.5
 user_agent = "garimpo-pessoal/2.0 (projeto de estudo)"
-sec_user_agent = "garimpo-pessoal/2.0 garimpo@example.com"   # a SEC exige um contato no User-Agent
+sec_user_agent = ""        # vazio = "garimpo-pessoal/2.0 <SEC_CONTACT ou MAIL_TO>" (a SEC exige um contato real)
 
 # ---------- LLM ----------
 

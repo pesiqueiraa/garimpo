@@ -5,6 +5,9 @@ from app.db.core import from_json, now_iso, to_json
 
 STATUSES = ("new", "watching", "queued", "dug", "discarded", "expired",
             "promoted", "validating", "building")
+# na fusão de duas empresas fica o status "mais forte" (decisão do dono acima de tudo)
+STATUS_RANK = {"building": 8, "validating": 7, "dug": 6, "promoted": 5, "queued": 4,
+               "watching": 3, "new": 2, "expired": 1, "discarded": 0}
 
 
 def _name_key(name: str) -> str:
@@ -82,13 +85,22 @@ def merge_companies(conn: sqlite3.Connection, keep_id: int, drop_id: int) -> int
         conn.execute(f"DELETE FROM {table} WHERE company_id=? AND EXISTS "
                      f"(SELECT 1 FROM {table} WHERE company_id=?)", (drop_id, keep_id))
         conn.execute(f"UPDATE {table} SET company_id=? WHERE company_id=?", (keep_id, drop_id))
-    drop = get_company(conn, drop_id)
+    drop, keep = get_company(conn, drop_id), get_company(conn, keep_id)
     conn.execute(
         """UPDATE companies SET first_seen=MIN(first_seen, ?), last_seen=MAX(last_seen, ?),
            tagline=COALESCE(tagline, ?), legacy_product_id=COALESCE(legacy_product_id, ?)
            WHERE id=?""",
         (drop["first_seen"], drop["last_seen"], drop["tagline"], drop["legacy_product_id"], keep_id))
+    if STATUS_RANK.get(drop["status"], 0) > STATUS_RANK.get(keep["status"], 0):
+        conn.execute(
+            """UPDATE companies SET status=?, status_reason=?, status_changed_at=?,
+               queue_priority=?, queued_at=?, promoted_at=?, dig_attempts=? WHERE id=?""",
+            (drop["status"], drop["status_reason"], drop["status_changed_at"],
+             drop["queue_priority"], drop["queued_at"], drop["promoted_at"],
+             drop["dig_attempts"], keep_id))
     conn.execute("DELETE FROM companies WHERE id=?", (drop_id,))
+    print(f"[db] empresa '{drop['name']}' ({drop['site_key']}) fundida em "
+          f"'{keep['name']}' ({keep['site_key']})")
     return keep_id
 
 
@@ -96,9 +108,14 @@ def set_company_status(conn: sqlite3.Connection, company_id: int, status: str,
                        reason: str | None = None) -> None:
     if status not in STATUSES:
         raise ValueError(f"status inválido: {status}")
+    ts = now_iso()
     conn.execute(
-        "UPDATE companies SET status=?, status_reason=?, status_changed_at=? WHERE id=?",
-        (status, reason, now_iso(), company_id))
+        """UPDATE companies SET status=?, status_reason=?, status_changed_at=?,
+           promoted_at = CASE WHEN ?='promoted' THEN ? ELSE promoted_at END,
+           queue_priority = CASE WHEN ?='queued' THEN queue_priority ELSE NULL END,
+           queued_at = CASE WHEN ?='queued' THEN queued_at ELSE NULL END
+           WHERE id=?""",
+        (status, reason, ts, status, ts, status, status, company_id))
 
 
 def companies_seen_since(conn: sqlite3.Connection, iso: str) -> list[sqlite3.Row]:
@@ -143,6 +160,13 @@ def add_event(conn: sqlite3.Connection, company_id: int, item: dict) -> bool:
         conn.execute("UPDATE events SET points=MAX(points, ?) WHERE source=? AND external_id=?",
                      (int(item.get("points") or 0), item["source"], external_id))
     return cur.rowcount > 0
+
+
+def company_for_event(conn: sqlite3.Connection, source: str, external_id: str) -> int | None:
+    """Empresa dona de um evento já visto (sobrevive a troca de site_key por redirect)."""
+    row = conn.execute("SELECT company_id FROM events WHERE source=? AND external_id=?",
+                       (source, str(external_id))).fetchone()
+    return row["company_id"] if row else None
 
 
 def company_sources(conn: sqlite3.Connection, company_id: int) -> list[str]:

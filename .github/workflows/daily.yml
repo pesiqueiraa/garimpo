@@ -60,10 +60,12 @@ jobs:
           fi
 
       - name: Rodar o Garimpo
+        timeout-minutes: 42     # sobra tempo para o passo de salvar mesmo se o pipeline travar
         env:
           PH_TOKEN: ${{ secrets.PH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -81,6 +83,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           [ -f data/garimpo.db ] || exit 0
+          # abrir o banco desfaz um journal pendente (job interrompido no meio de uma escrita);
+          # banco que não passa no integrity_check não sobe — o do branch data continua valendo
+          python3 -c "
+          import sqlite3, sys
+          c = sqlite3.connect('data/garimpo.db')
+          r = c.execute('PRAGMA integrity_check').fetchone()[0]
+          c.close()
+          sys.exit(0 if r == 'ok' else 'banco corrompido, não vou salvar: ' + r)
+          "
           tmpdb="$(mktemp)"
           cp data/garimpo.db "$tmpdb"
           workdir="$(mktemp -d)"

@@ -150,3 +150,44 @@ def test_atalho_da_v1():
     assert compat.translate([]) == ["rodar"]
     assert compat.translate(["--no-mail"]) == ["rodar", "--sem-email"]
     assert compat.translate(["--investigar", "acme"]) == ["investigar", "acme"]
+
+
+def _um_dia_depois(path):
+    """Empurra todos os carimbos de tempo do banco 1 dia para trás (simula o dia seguinte)."""
+    from datetime import datetime, timedelta
+    columns = {"runs": ("started_at", "finished_at"), "companies": ("first_seen", "last_seen",
+               "status_changed_at", "queued_at"), "events": ("seen_at",),
+               "dossiers": ("created_at",), "scores": ("created_at",),
+               "extractions": ("created_at",), "observations": ("observed_at",)}
+    conn = db.connect(path)
+    for table, cols in columns.items():
+        for col in cols:
+            for rowid, value in conn.execute(f"SELECT rowid, {col} FROM {table}").fetchall():
+                if value:
+                    shifted = (datetime.fromisoformat(value) - timedelta(days=1)).isoformat(timespec="seconds")
+                    conn.execute(f"UPDATE {table} SET {col}=? WHERE rowid=?", (shifted, rowid))
+    conn.commit()
+    conn.close()
+
+
+def test_dois_dias_seguidos_sem_repetir_nem_duplicar(prod_db, monkeypatch):
+    sent = _edges(monkeypatch)
+    assert cli.main(["rodar"]) == 0
+    day1 = next(Path(prod_db).parent.glob("relatorio-*.html")).read_text()
+    assert "Agendaí" in day1
+    _um_dia_depois(prod_db)
+
+    novo = {"name": "Notinha", "tagline": "Notas fiscais para freelancers",
+            "url": "https://notinha.io", "source": "hackernews", "kind": "launch",
+            "external_id": "hn-3", "points": 120}
+    _edges(monkeypatch, items=ITEMS + [novo])
+    assert cli.main(["rodar"]) == 0
+    day2 = next(Path(prod_db).parent.glob("relatorio-*.html")).read_text()
+    assert "Notinha" in day2
+    assert "Agendaí" not in day2  # o dossiê de ontem não volta no e-mail de hoje
+
+    conn = db.connect(prod_db)
+    assert conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 3
+    assert conn.execute("SELECT COUNT(*) FROM dossiers WHERE company_id=?",
+                        (db.find_company_by_key(conn, "agendai.com")["id"],)).fetchone()[0] == 1
+    assert all(r["errors"] == [] for r in db.recent_runs(conn, 2))

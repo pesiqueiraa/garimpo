@@ -67,6 +67,7 @@ Ver o mapa de módulos em `docs/v2-arquitetura.md`. Resumo: `app/cli.py` orquest
 | `SERPER_API_KEY` | Não | Busca real (Google BR, Reclame Aqui, G2, LatAm) |
 | `PH_TOKEN` | Não | Product Hunt |
 | `GITHUB_TOKEN` | Não | Dossiês como Issues e leitura de feedback (o Actions fornece) |
+| `SEC_CONTACT` | Não | Contato no User-Agent da SEC (cai para `MAIL_TO`; sem nenhum, Form D é pulado) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` / `MAIL_FROM` | Não | E-mail |
 
 ## 7. Estado atual

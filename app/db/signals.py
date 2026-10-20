@@ -6,7 +6,11 @@ from app.db.core import from_json, now_iso, to_json
 
 def add_observations(conn: sqlite3.Connection, company_id: int, observations: list[dict],
                      observed_at: str | None = None) -> int:
-    """Insere observações. Pula a que repete o último valor da mesma métrica e fonte no mesmo dia."""
+    """Insere observações. Pula a que repete o último valor da mesma métrica e fonte.
+
+    É um registro de mudanças: valor igual ao último não entra (o banco vive no git e
+    ~300 empresas do YC são recoletadas todo dia). Tração nova = linha nova = score novo.
+    """
     ts = observed_at or now_iso()
     added = 0
     for o in observations:
@@ -28,8 +32,7 @@ def add_observations(conn: sqlite3.Connection, company_id: int, observations: li
             """SELECT value_num, value_text, observed_at FROM observations
                WHERE company_id=? AND metric=? AND source=? ORDER BY id DESC LIMIT 1""",
             (company_id, metric, source)).fetchone()
-        if (last is not None and last["observed_at"][:10] == ts[:10]
-                and last["value_num"] == value_num and last["value_text"] == value_text):
+        if last is not None and last["value_num"] == value_num and last["value_text"] == value_text:
             continue
         conn.execute(
             """INSERT INTO observations (company_id, metric, value_num, value_text, source, observed_at)

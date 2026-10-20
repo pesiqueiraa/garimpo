@@ -41,27 +41,51 @@ class Pipeline:
         self.source_counts: dict = {}
 
     def stage(self, name: str, fn, *args, **kwargs):
+        """Roda uma etapa. Sucesso ou teto de orçamento: commita o que ela gravou.
+        Exceção: desfaz o que ficou pela metade. Ctrl+C/timeout: desfaz e repassa."""
         try:
             result = fn(*args, **kwargs)
             self.stats[name] = _jsonable(result)
+            self._commit()
             return result
         except llm.BudgetExceeded as e:
             self.errors.append(f"{name}: {e}")
             print(f"[{name}] {e}")
+            self._commit()
         except Exception as e:
             self.errors.append(f"{name}: {type(e).__name__}: {e}")
             print(f"[{name}] etapa falhou: {e}")
             traceback.print_exc()
-        finally:
-            try:
-                self.conn.commit()
-            except Exception:
-                pass
+            self._rollback()
+        except BaseException:
+            self._rollback()
+            raise
         return None
+
+    def _commit(self) -> None:
+        try:
+            self.conn.commit()
+        except Exception as e:
+            print(f"[pipeline] commit falhou: {e}")
+
+    def _rollback(self) -> None:
+        try:
+            self.conn.rollback()
+        except Exception as e:
+            print(f"[pipeline] rollback falhou: {e}")
 
     def finish(self) -> None:
         db.finish_run(self.conn, self.run_id, self.stats, self.source_counts,
                       llm.usage(), self.errors)
+
+
+def _one_second_after(iso: str) -> str:
+    """Carimbos têm resolução de segundo: o que foi gravado no mesmo segundo em que a
+    execução anterior terminou pertence a ela, não a esta."""
+    try:
+        return (datetime.fromisoformat(iso) + timedelta(seconds=1)).isoformat(timespec="seconds")
+    except (TypeError, ValueError):
+        return db.days_ago_iso(26 / 24)
 
 
 def is_weekly_day(cfg: dict, now: datetime | None = None) -> bool:
@@ -93,6 +117,10 @@ def cmd_rodar(args, cfg: dict) -> int:
     from app import deliver, dig, feedback, health, signals, trends
     conn = db.connect()
     llm.configure(conn, budget_usd=float(get(cfg, "fontes.orcamento.max_usd_per_run", 0.30)))
+    previous = db.recent_runs(conn, 1, "rodar")
+    # o e-mail mostra só o que apareceu desde a última execução terminada (nada repetido)
+    since = (_one_second_after(previous[0]["finished_at"]) if previous
+             else db.days_ago_iso(26 / 24))
     p = Pipeline(conn, "rodar")
     weekly = args.semanal or is_weekly_day(cfg)
 
@@ -117,7 +145,7 @@ def cmd_rodar(args, cfg: dict) -> int:
 
     alerts = health.alerts(db.recent_runs(conn, 7, "rodar"), p.source_counts, p.errors)
     run_info = {"stats": p.stats, "source_counts": p.source_counts, "alerts": alerts,
-                "usage": llm.usage()}
+                "usage": llm.usage(), "since": since}
     built = p.stage("email_diario", deliver.daily.build, conn, cfg, run_info)
     if built:
         subject, html = built

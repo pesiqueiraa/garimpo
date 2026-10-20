@@ -57,7 +57,7 @@ app/
     digs.py          fila, dossiês, concorrentes de loja, dores, concorrentes BR
     feedback.py      sinais do dono
     runs.py          registro de execuções
-  migrations/        001_v1_base.sql, 002_v2_schema.sql, 003_v2_backfill.py
+  migrations/        001_v1_base.py, 002_v2_schema.sql, 003_v2_backfill.py, 004_v2_tracking.sql
   resolve.py         URL → site_key/domínio; ingestão dos itens coletados
   llm.py             única porta para a OpenAI (JSON, schema, cache, orçamento, embeddings)
   prompts/           prompts versionados (o nome do arquivo é a versão)
@@ -99,7 +99,7 @@ Tabelas da v2 (as da v1 viram `legacy_*` na migração 002 e ficam só para cons
 |---|---|
 | `companies` | uma linha por empresa; `site_key` único, `domain` registrável, `status` |
 | `events` | lançamentos e listagens (`source`, `kind`, `external_id`, `points`, `payload`) |
-| `observations` | medições ao longo do tempo (`metric`, `value_num`, `value_text`, `source`, `observed_at`) — só recebe INSERT |
+| `observations` | medições ao longo do tempo (`metric`, `value_num`, `value_text`, `source`, `observed_at`) — só recebe INSERT, e só quando o valor muda (registro de mudanças) |
 | `site_pages` | última leitura do site e da página de preços de cada empresa |
 | `extractions` | fatos extraídos pelo LLM, com `prompt_version` e `model` |
 | `scores` | `kind` = prior, posterior ou legacy; `subscores` e `evidence` em JSON |
@@ -120,8 +120,13 @@ Tabelas da v2 (as da v1 viram `legacy_*` na migração 002 e ficam só para cons
   `name:<nome normalizado>` quando não há URL.
 - `domain` é o domínio registrável usado pelos sinais (vagas, Tranco). Fica
   vazio em plataformas compartilhadas.
-- Se o site redireciona para um domínio que já existe, as empresas são fundidas
-  (`db.merge_companies`).
+- Se o site redireciona para outro domínio **com cara de ser da mesma empresa**
+  (nome ou domínio parecidos, ou link de redirect do Product Hunt), a chave muda
+  e, se o destino já existe, as empresas são fundidas (`db.merge_companies`,
+  que mantém o status mais forte e registra a fusão no log). Redirect para
+  terceiro sem relação (SSO, hospedagem) é ignorado.
+- A ingestão procura primeiro o evento (`source` + `external_id`): depois de um
+  redirect, o mesmo item da fonte volta para a mesma empresa, sem duplicar.
 
 ### Status da empresa
 
@@ -129,6 +134,13 @@ Tabelas da v2 (as da v1 viram `legacy_*` na migração 002 e ficam só para cons
 Saídas laterais: `discarded` (descarte automático ou do dono), `expired` (90
 dias na fila sem tração), `promoted` (revisita mostrou tração maior; volta para
 a fila com prioridade), `validating` e `building` (vindos do dono).
+
+- Sair da fila (qualquer status diferente de `queued`) limpa `queued_at` e a
+  prioridade: quem volta ganha prazo novo.
+- `promoted_at` guarda a promoção; o bônus na fila vale até a empresa ser escavada.
+- A revisita compara a tração de agora com a da revisita anterior
+  (`revisit_traction`) ou, na primeira, com a do primeiro score — os sinais
+  diários já atualizam a tração antes de a revisita chegar.
 
 ### Métricas de `observations`
 
@@ -228,3 +240,9 @@ melhor dossiê da semana. Nada levanta para fora.
 - `payload` dos eventos é apagado após 90 dias e o banco passa por `VACUUM` ao
   final de cada execução.
 - Issues precisam de `GITHUB_TOKEN` com `issues: write` (o workflow já pede).
+- Cada etapa do `rodar` commita só quando termina; exceção desfaz o que ficou
+  pela metade, e Ctrl+C/timeout desfaz e encerra. Antes de subir o banco, o
+  workflow roda `PRAGMA integrity_check` (abrir o banco desfaz journal pendente);
+  banco corrompido não sobe.
+- O e-mail diário mostra só o que surgiu depois da execução anterior terminada.
+- Form D só é consultado com contato real no User-Agent (`SEC_CONTACT` ou `MAIL_TO`).

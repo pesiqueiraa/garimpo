@@ -65,6 +65,7 @@ funcionando por compatibilidade com a v1.
 | `SERPER_API_KEY` | Busca real no Google BR, Reclame Aqui, G2 e América Latina | serper.dev — sem ela, o veredito fica "desconhecido" |
 | `PH_TOKEN` | Coletar do Product Hunt | producthunt.com/v2/oauth/applications → *Developer Token* |
 | `GITHUB_TOKEN` | Dossiês como Issues e feedback | o Actions já fornece; localmente, um token com acesso a Issues |
+| `SEC_CONTACT` | E-mail de contato no User-Agent da SEC (Form D) | opcional: sem ele usa `MAIL_TO`; sem nenhum, o Form D é pulado |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO` / `MAIL_FROM` | E-mail | Resend (`smtp.resend.com:587`) ou Gmail com senha de app |
 
 Sem nenhuma chave, Show HN, YC, sites e sinais públicos ainda funcionam e o

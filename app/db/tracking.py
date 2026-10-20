@@ -22,15 +22,25 @@ def revisit_candidates(conn: sqlite3.Connection, min_prior: float) -> list[sqlit
         (*WATCHED, min_prior)).fetchall()
 
 
-def mark_revisited(conn: sqlite3.Connection, company_id: int, stage: int) -> None:
-    conn.execute("UPDATE companies SET revisit_stage=?, last_revisit_at=? WHERE id=?",
-                 (stage, now_iso(), company_id))
+def mark_revisited(conn: sqlite3.Connection, company_id: int, stage: int,
+                   traction: float | None = None) -> None:
+    conn.execute(
+        """UPDATE companies SET revisit_stage=?, last_revisit_at=?,
+           revisit_traction=COALESCE(?, revisit_traction) WHERE id=?""",
+        (stage, now_iso(), traction, company_id))
+
+
+def first_traction(conn: sqlite3.Connection, company_id: int) -> float | None:
+    """Tração do primeiro score prévio da empresa (base da primeira revisita)."""
+    row = conn.execute("SELECT subscores FROM scores WHERE company_id=? AND kind='prior' "
+                       "ORDER BY id LIMIT 1", (company_id,)).fetchone()
+    return from_json(row["subscores"], dict, {}).get("traction") if row else None
 
 
 def promoted_since(conn: sqlite3.Connection, iso: str) -> list[sqlite3.Row]:
     return conn.execute(
-        """SELECT * FROM companies WHERE status='promoted' AND status_changed_at >= ?
-           ORDER BY status_changed_at DESC""", (iso,)).fetchall()
+        """SELECT * FROM companies WHERE promoted_at >= ? ORDER BY promoted_at DESC""",
+        (iso,)).fetchall()
 
 
 def traction_movers(conn: sqlite3.Connection, since_iso: str, limit: int = 8) -> list[dict]:

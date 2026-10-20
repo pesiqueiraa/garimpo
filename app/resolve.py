@@ -140,7 +140,13 @@ def ingest(conn, items: list[dict], max_new: int = 150) -> dict:
             continue
         key, domain = site_key(item.get("url"), item["name"])
         name_key = normalize_name(item["name"])
-        company = db.find_company_by_key(conn, key)
+        company = None
+        if item.get("external_id"):
+            # o site_key pode ter mudado (redirect resolvido); o evento não muda
+            known = db.company_for_event(conn, item["source"], str(item["external_id"]))
+            company = db.get_company(conn, known) if known else None
+        if company is None:
+            company = db.find_company_by_key(conn, key)
         if company is None and not key.startswith("name:"):
             # empresa conhecida só pelo nome ganha o domínio agora
             by_name = db.find_company_by_key(conn, "name:" + name_key)

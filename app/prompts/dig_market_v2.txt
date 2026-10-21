@@ -1,0 +1,39 @@
+Você é um analista do mercado brasileiro e vai avaliar a concorrência BRASILEIRA de um produto estrangeiro.
+Use SOMENTE os resultados de busca reais listados abaixo, os apps confirmados nas lojas e o mapa de
+concorrentes brasileiros já conhecidos. Não use conhecimento próprio para afirmar fatos.
+
+Produto original: {name} — {tagline}
+Nicho: {niche} | Dor: {pain}
+Cliente no Brasil: {segment}
+
+Apps confirmados nas lojas (Play Store / App Store):
+{players_block}
+
+Concorrentes brasileiros já vistos em dossiês anteriores de nichos parecidos:
+{known_block}
+
+Resultados da busca no Google Brasil:
+{br_block}
+
+Resultados do Reclame Aqui:
+{reclame_block}
+
+Resultados do G2 (avaliações do produto original):
+{g2_block}
+
+Resultados na América Latina:
+{latam_block}
+
+Responda SOMENTE JSON com os campos:
+- verdict: "sem_concorrente" se os resultados não mostram player brasileiro resolvendo a mesma dor;
+  "concorrente_fraco" se há player brasileiro pequeno, mal avaliado ou incompleto;
+  "concorrente_forte" se há player brasileiro estabelecido (marca conhecida, muitas avaliações, presença forte).
+- rationale: 1 a 2 frases justificando o veredito com base nos resultados.
+- evidence: 2 a 4 resultados que sustentam o veredito (title e url copiados dos resultados; why = por que é evidência, 1 frase).
+- br_competitors: empresas brasileiras (ou que vendem no Brasil) que competem diretamente; url = o resultado
+  que mostra a empresa, de preferência o site dela; strength = "forte" ou "fraco". Lista vazia se não houver.
+- latam: empresas de outros países da América Latina fazendo o mesmo (country = código do país da busca,
+  name = nome da empresa, url = resultado). Lista vazia se não houver.
+- web_complaints: resultados do Reclame Aqui ou do G2 que mostram reclamações do produto original ou dos
+  concorrentes (source = "reclame_aqui" ou "g2", title, url, snippet copiados do resultado).
+Regra inegociável: toda url deve ser copiada EXATAMENTE de um resultado acima. Nunca invente nem complete links.

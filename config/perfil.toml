@@ -1,0 +1,30 @@
+# Preferências pessoais que formam a subnota "fit" (base 3, somando ajustes, limitada a 1-5).
+
+[audience]           # base por público
+B2B = 4
+ambos = 3
+B2C = 2
+
+[sales_motion]       # ajuste
+self_serve = 1
+misto = 0
+sales_led = -1
+desconhecido = 0
+
+[technical_complexity]
+baixa = 1
+media = 0
+alta = -1
+
+[pricing_model]
+assinatura = 0.5
+freemium = 0.5
+uso = 0
+licenca = 0
+transacao = 0
+anuncio = -0.5
+desconhecido = 0
+
+[afinidade]
+weight = 1.0         # feedback por embeddings move o fit em até ±1
+min_feedback = 3     # só vale depois de 3 sinais do dono

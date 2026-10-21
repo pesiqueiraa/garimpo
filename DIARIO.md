@@ -11,6 +11,14 @@ Regra do período (docs/roadmap.md): **zero código novo, só uso.** Este diári
 
 ---
 
+## Antes de religar (v2)
+
+O workflow foi desligado manualmente em 22/08/2026. Por quê? _(uma ou duas frases — é o dado mais importante deste diário)_
+
+-
+
+---
+
 ## Log diário
 
 Uma linha por dia basta. Se pulou o e-mail, dizer por quê — sem culpa, com honestidade.

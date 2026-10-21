@@ -1,0 +1,51 @@
+# Pesos e limiares do score. O score é heurístico — estes números são hipótese,
+# calibrada com o golden set (python -m app avaliar). Mudou algo? Troque a versão.
+version = "pesos-2026-10"
+
+# Peso de cada subnota (1 a 5) no total de 0 a 10.
+[prior]
+traction = 0.30
+tropicalizability = 0.25
+timing = 0.10
+fit = 0.20
+gap = 0.15          # no prévio o gap é só palpite do LLM
+
+[posterior]
+traction = 0.25
+tropicalizability = 0.20
+timing = 0.10
+fit = 0.15
+gap = 0.30          # depois da busca real o gap pesa mais
+
+[descarte]
+kill_flags = [
+  "dev_tool_niche", "ai_model_release", "hardware", "two_sided_marketplace",
+  "banking_license", "health_data", "crypto", "research_demo", "not_a_product",
+]
+kill_business_types = ["ai_model_or_infra", "hardware", "open_source_project"]
+
+[gap.guess]          # palpite do LLM, puxado para o meio
+sem_concorrente = 4
+concorrente_fraco = 3
+concorrente_forte = 2
+desconhecido = 3
+
+[gap.verdict]        # veredito com busca real
+sem_concorrente = 5
+concorrente_fraco = 4
+concorrente_forte = 1
+desconhecido = 3
+
+# Tração: [limiar, subnota] em ordem decrescente; vale o primeiro que bater.
+[tracao]
+mrr_usd = [[50000, 5], [10000, 4], [1000, 3], [1, 2]]
+team_size = [[50, 5], [20, 4], [8, 3], [3, 2]]
+open_jobs = [[20, 5], [8, 4], [3, 3], [1, 2]]
+tranco_rank_max = [[100000, 5], [300000, 4], [1000000, 3]]   # aqui menor é melhor
+points = [[300, 4], [100, 3], [20, 2]]
+formd_filings = [[1, 3]]
+domain_age_years = [[3, 3]]
+yc_proven_status = ["Active", "Public"]
+multi_source_bonus = 1
+strong_signal_min = 4
+strong_bonus = 1

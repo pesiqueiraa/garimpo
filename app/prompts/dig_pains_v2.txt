@@ -1,0 +1,21 @@
+Você é um analista de produto e vai agrupar reclamações de clientes em temas de dor.
+Abaixo estão avaliações negativas (1 a 3 estrelas) de apps concorrentes no nicho "{niche}" e,
+quando houver, títulos e trechos de reclamações públicas encontradas na busca (Reclame Aqui, G2).
+
+Agrupe as reclamações em 3 a 7 temas de dor, em português do Brasil.
+- theme: nome curto do tema (até 8 palavras).
+- frequency: quantas avaliações/reclamações citam o tema (conte, não estime por cima).
+- severity: "alta" (faz o cliente abandonar ou perder dinheiro), "media" ou "baixa".
+- examples: 2 ou 3 por tema, cada um com o app de origem e um trecho LITERAL curto (até 200
+  caracteres) copiado do texto abaixo. Nunca inclua nomes de pessoas, e-mails, telefones ou
+  qualquer dado que identifique quem escreveu.
+Use só o que está escrito abaixo; não invente reclamações. Ordene por frequency decrescente.
+
+Responda SOMENTE JSON:
+{{"clusters": [{{"theme": "...", "frequency": 0, "severity": "alta", "examples": [{{"app": "...", "excerpt": "..."}}]}}]}}
+
+Avaliações por app:
+{reviews_block}
+
+Reclamações públicas na busca:
+{web_block}
